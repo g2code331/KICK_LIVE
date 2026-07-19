@@ -161,22 +161,6 @@ export const mediaItems: MediaItem[] = [
     category: "News",
     image: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?auto=format&fit=crop&q=80&w=800",
     date: twoDaysAgo,
-    excerpt: "The midfield maestro has been in scintillating form with 4 goals and 3 assists this month."
-  },
-  {
-    id: 3,
-    title: "Transfer Window: Top 5 Deals to Watch",
-    category: "Transfer News",
-    image: "https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&q=80&w=800",
-    date: twoDaysAgo,
-    excerpt: "Several clubs are looking to strengthen their squads ahead of the second half of the season."
-  },
-  {
-    id: 4,
-    title: "Rx Cup Quarter-Final Draw Revealed",
-    category: "Cup Draw",
-    image: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=800",
-    date: today,
-    excerpt: "Exciting matchups await as the road to the Rx Cup final begins to take shape."
+    excerpt: "The young midfielder has been exceptional for Kumasi United this month, scoring 4 goals."
   },
 ];

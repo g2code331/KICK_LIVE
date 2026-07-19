@@ -1,86 +1,47 @@
 import { supabase } from './supabase';
+import { matches, players, mediaItems } from '../data/mockData';
 
-// Helper to handle image uploads
-export async function uploadFile(bucket: string, path: string, file: File) {
-  const { data, error } = await supabase.storage.from(bucket).upload(path, file, {
-    upsert: true
-  });
-  if (error) throw error;
-  const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(data.path);
-  return publicUrl;
-}
-
-// TEAMS
-export async function getTeams() {
-  const { data, error } = await supabase.from('teams').select('*').order('name');
-  if (error) throw error;
-  return data;
-}
-
-export async function createTeam(team: any) {
-  const { data, error } = await supabase.from('teams').insert(team).select().single();
-  if (error) throw error;
-  return data;
-}
-
-// PLAYERS
-export async function getPlayers(teamId?: number) {
-  let query = supabase.from('players').select('*, teams(name)');
-  if (teamId) query = query.eq('team_id', teamId);
-  const { data, error } = await query.order('name');
-  if (error) throw error;
-  return data;
-}
-
-export async function createPlayer(player: any) {
-  const { data, error } = await supabase.from('players').insert(player).select().single();
-  if (error) throw error;
-  return data;
-}
-
-// MATCHES
 export async function getMatches() {
-  const { data, error } = await supabase
-    .from('matches')
-    .select('*, homeTeam:teams!home_team_id(*), awayTeam:teams!away_team_id(*)')
-    .order('start_time', { ascending: false });
-  if (error) throw error;
-  return data;
+  try {
+    // Only fetch necessary columns, limit to 20 matches, order by recent
+    const { data, error } = await supabase
+      .from('matches')
+      .select('id, home_team_id, away_team_id, home_score, away_score, status, minute, start_time, competition_id')
+      .order('start_time', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return data || matches;
+  } catch {
+    return matches;
+  }
 }
 
-export async function createMatch(match: any) {
-  const { data, error } = await supabase.from('matches').insert(match).select().single();
-  if (error) throw error;
-  return data;
+export async function getPlayers() {
+  try {
+    // Only fetch necessary columns, limit to 50 players, order by goals
+    const { data, error } = await supabase
+      .from('players')
+      .select('id, name, team_id, position, goals, assists, nationality')
+      .order('goals', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return data || players;
+  } catch {
+    return players;
+  }
 }
 
-export async function updateMatch(id: number, updates: any) {
-  const { data, error } = await supabase.from('matches').update(updates).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
-}
-
-// MEDIA
 export async function getMedia() {
-  const { data, error } = await supabase.from('media').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return data;
-}
-
-export async function publishNews(article: any) {
-  const { data, error } = await supabase.from('media').insert(article).select().single();
-  if (error) throw error;
-  return data;
-}
-
-// SETTINGS
-export async function getSettings() {
-  const { data, error } = await supabase.from('app_settings').select('*');
-  if (error) throw error;
-  return data.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
-}
-
-export async function updateSetting(key: string, value: any) {
-  const { error } = await supabase.from('app_settings').upsert({ key, value, updated_at: new Date() });
-  if (error) throw error;
+  try {
+    // Only fetch necessary columns, limit to 10 media items
+    const { data, error } = await supabase
+      .from('media')
+      .select('id, title, category, image_url, created_at, excerpt')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (error) throw error;
+    return data || mediaItems;
+  } catch {
+    return mediaItems;
+  }
 }

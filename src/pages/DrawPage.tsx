@@ -7,7 +7,7 @@ export default function DrawPage() {
   const [isRevealing, setIsRevealing] = useState(false);
   const [revealedGroup, setRevealedGroup] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
-  const [isMyTurn, setIsMyTurn] = useState(true);
+  const [isMyTurn] = useState(true);
 
   useEffect(() => {
     if (timeLeft > 0 && isMyTurn && !selectedBall && selectedBall === null) {
@@ -38,14 +38,6 @@ export default function DrawPage() {
       
       setIsRevealing(false);
     }, 2000);
-  };
-
-  const handleReset = () => {
-    setSelectedBall(null);
-    setRevealedGroup(null);
-    setIsRevealing(false);
-    setTimeLeft(30);
-    setIsMyTurn(true);
   };
 
   const balls = [
@@ -87,13 +79,13 @@ export default function DrawPage() {
               </p>
               {isMyTurn && selectedBall === null && (
                 <div className="flex items-center gap-2 mt-1">
-                   <div className="h-1.5 w-32 bg-white/5 rounded-full overflow-hidden">
-                     <div 
-                        style={{ width: `${(timeLeft/30)*100}%`, transition: 'width 1s linear' }}
-                        className="h-full bg-brand-red"
-                      />
-                   </div>
-                   <span className="text-[10px] font-black text-brand-red">{timeLeft}s</span>
+                  <div className="h-1.5 w-32 bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                      style={{ width: `${(timeLeft/30)*100}%`, transition: 'width 1s linear' }}
+                      className="h-full bg-brand-red"
+                    />
+                  </div>
+                  <span className="text-[10px] font-black text-brand-red">{timeLeft}s</span>
                 </div>
               )}
             </div>
@@ -110,79 +102,74 @@ export default function DrawPage() {
               <div className="text-center space-y-8 z-10 animate-in">
                 <div className="space-y-2">
                   <p className="text-sm font-black uppercase tracking-[0.5em] text-white/40">Selection Result</p>
-                  <h2 className="text-7xl md:text-9xl font-black italic text-brand-green text-glow-green tracking-widest transition-all duration-1000">
-                    {revealedGroup}
-                  </h2>
+                    <h2 className="text-7xl md:text-9xl font-black italic text-brand-green text-glow-green tracking-widest transition-all duration-1000">
+                      {revealedGroup}
+                    </h2>
                 </div>
                 <div className="flex flex-col items-center gap-6">
                    <div className="w-24 h-24 gradient-green rounded-[2rem] flex items-center justify-center shadow-[0_0_50px_rgba(57,255,20,0.5)]">
-                      <Trophy size={48} className="text-black" />
+                     <Trophy size={48} className="text-black" />
                    </div>
-                   <p className="text-lg font-bold text-white max-w-xs uppercase italic tracking-tighter">
-                      Your team has been placed!
-                   </p>
-                   <button 
-                     onClick={handleReset}
-                     className="mt-4 gradient-green text-black px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-sm hover:opacity-90 transition-opacity"
-                   >
-                     Draw Again
-                   </button>
+                   <p className="text-white/60 font-bold uppercase tracking-widest animate-pulse">Your team has been placed!</p>
                 </div>
               </div>
             ) : isRevealing ? (
               <div className="text-center space-y-8 z-10">
-                <div className="w-32 h-32 mx-auto rounded-full border-4 border-brand-green/30 border-t-brand-green animate-spin"></div>
-                <p className="text-sm font-black uppercase tracking-[0.3em] text-brand-green animate-pulse">Revealing...</p>
+                <div className="w-32 h-32 rounded-full border-8 border-brand-green border-t-transparent animate-spin mx-auto"></div>
+                <p className="text-2xl font-black italic uppercase tracking-widest text-brand-green">Revealing...</p>
               </div>
             ) : (
               <div className="text-center space-y-12 z-10">
-                <div>
-                  <p className="text-sm font-black uppercase tracking-[0.5em] text-white/20 mb-4">Select a Ball</p>
-                  <p className="text-white/40 text-xs">Click on one of the balls below to reveal your group placement</p>
+                <div className="space-y-4">
+                  <h2 className="text-4xl font-black italic uppercase tracking-tighter">Select a Ball</h2>
+                  <p className="text-white/40 max-w-md mx-auto font-medium">Click on one of the balls below to reveal your group placement</p>
                 </div>
                 
-                <div className="flex gap-6 justify-center flex-wrap">
+                <div className="flex flex-wrap justify-center gap-6">
                   {balls.map((ball, index) => (
                     <button
                       key={index}
                       onClick={() => handleBallClick(index)}
-                      className={`w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br ${ball.color} flex items-center justify-center text-2xl md:text-3xl font-black text-white shadow-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] glow-pulse`}
+                      className={`w-20 h-20 rounded-full bg-gradient-to-br ${ball.color} shadow-lg hover:scale-110 hover:shadow-2xl transition-all duration-300 flex items-center justify-center text-2xl font-black italic border-4 border-white/10 group relative`}
                     >
+                      <div className="absolute inset-0 bg-white/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
                       {ball.label}
                     </button>
                   ))}
                 </div>
                 
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/20">
-                  {timeLeft > 0 ? `Auto-select in ${timeLeft}s` : 'Auto-selecting...'}
-                </p>
+                <div className="pt-8">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">
+                    {timeLeft > 0 ? `Auto-select in ${timeLeft}s` : 'Auto-selecting...'}
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
           {/* Side Panel - Groups */}
           <div className="lg:col-span-4 space-y-6">
-            <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white/30 mb-4">Group Assignments</h3>
+            <h3 className="text-sm font-black uppercase tracking-widest text-white/40 px-4">Group Assignments</h3>
             
             {["A", "B", "C", "D"].map((group) => (
-              <div key={group} className={`glass rounded-2xl p-5 border border-white/5 transition-all ${revealedGroup === `GROUP ${group}` ? 'border-brand-green/30 bg-brand-green/5' : ''}`}>
-                <div className="flex items-center justify-between mb-4">
+              <div key={group} className="glass rounded-[2rem] p-6 border border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm ${revealedGroup === `GROUP ${group}` ? 'gradient-green text-black' : 'bg-white/5 text-white/40'}`}>
+                    <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-xs font-black">
                       {group}
                     </div>
-                    <span className="text-xs font-black uppercase tracking-widest text-white/40">Group {group}</span>
+                    <span className="font-black italic uppercase text-sm">Group {group}</span>
                   </div>
                   {revealedGroup === `GROUP ${group}` && (
-                    <span className="text-[8px] font-black uppercase tracking-widest text-brand-green bg-brand-green/10 px-2 py-1 rounded">YOUR GROUP</span>
+                    <span className="text-[8px] font-black bg-brand-green text-black px-2 py-0.5 rounded-full">YOUR GROUP</span>
                   )}
                 </div>
+                
                 <div className="space-y-2">
                   {[1, 2, 3, 4].map(slot => (
-                    <div key={slot} className="flex items-center gap-3 py-1.5">
-                      <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-black text-white/20">{slot}</div>
-                      <div className="h-px flex-grow bg-white/5"></div>
-                      <span className="text-[10px] font-bold text-white/10 uppercase tracking-widest">TBD</span>
+                    <div key={slot} className="flex items-center justify-between bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                      <span className="text-[10px] font-bold text-white/20">{slot}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white/10 italic">TBD</span>
                     </div>
                   ))}
                 </div>

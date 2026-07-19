@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Settings, Database, Shield, Zap, Globe, Cpu, Smartphone, Moon, Sun, Lock, Trophy } from 'lucide-react';
+import { X, Settings, Database, Shield, Zap, Globe, Cpu, Smartphone, Moon, Sun, Lock, Trophy, Loader2 } from 'lucide-react';
 
 interface AppSettingsDashboardProps {
   isOpen: boolean;
@@ -81,7 +81,7 @@ export default function AppSettingsDashboard({ isOpen, onClose }: AppSettingsDas
                               </div>
                            </div>
                            <button 
-                             onClick={() => handleToggle(item.id as keyof typeof toggles)}
+                             onClick={() => handleToggle(item.id as any)}
                              className={`w-12 h-6 rounded-full relative transition-all duration-300 ${toggles[item.id as keyof typeof toggles] ? 'bg-brand-green' : 'bg-white/10'}`}
                            >
                               <div className={`absolute top-1 w-4 h-4 rounded-full bg-black transition-all duration-300 ${toggles[item.id as keyof typeof toggles] ? 'right-1' : 'left-1'}`}></div>
@@ -93,7 +93,7 @@ export default function AppSettingsDashboard({ isOpen, onClose }: AppSettingsDas
 
                <div>
                   <h3 className="text-xs font-black uppercase tracking-[0.2em] text-brand-red mb-8 flex items-center gap-2">
-                     <Shield size={14} /> Security & Database
+                      <Shield size={14} /> Security & Database
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      {[
@@ -102,7 +102,7 @@ export default function AppSettingsDashboard({ isOpen, onClose }: AppSettingsDas
                      ].map(item => (
                         <div key={item.id} className="p-6 glass-light rounded-3xl border border-white/5 flex items-center justify-between hover:bg-white/5 transition-all group">
                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 group-hover:text-brand-red transition-colors">
+                              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 group-hover:text-brand-green transition-colors">
                                  {item.icon}
                               </div>
                               <div>
@@ -111,8 +111,8 @@ export default function AppSettingsDashboard({ isOpen, onClose }: AppSettingsDas
                               </div>
                            </div>
                            <button 
-                             onClick={() => handleToggle(item.id as keyof typeof toggles)}
-                             className={`w-12 h-6 rounded-full relative transition-all duration-300 ${toggles[item.id as keyof typeof toggles] ? 'bg-brand-red' : 'bg-white/10'}`}
+                             onClick={() => handleToggle(item.id as any)}
+                             className={`w-12 h-6 rounded-full relative transition-all duration-300 ${toggles[item.id as keyof typeof toggles] ? 'bg-brand-green' : 'bg-white/10'}`}
                            >
                               <div className={`absolute top-1 w-4 h-4 rounded-full bg-black transition-all duration-300 ${toggles[item.id as keyof typeof toggles] ? 'right-1' : 'left-1'}`}></div>
                            </button>
@@ -123,68 +123,53 @@ export default function AppSettingsDashboard({ isOpen, onClose }: AppSettingsDas
             </div>
 
             {/* Sidebar Config */}
-            <div className="lg:col-span-4 space-y-8">
-               <div className="p-8 rounded-[2.5rem] bg-brand-blue/10 border border-brand-blue/20">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-brand-blue mb-4">UI Preferences</h4>
-                  <div className="flex gap-4">
-                     <button 
-                       onClick={() => handleToggle('darkMode')}
-                       className={`flex-1 p-4 rounded-2xl flex flex-col items-center gap-2 border-2 transition-all ${toggles.darkMode ? 'border-brand-blue bg-brand-blue/10' : 'border-white/5 opacity-40'}`}>
-                        <Moon size={24} />
-                        <span className="text-[10px] font-bold uppercase">Dark Mode</span>
-                     </button>
-                     <button 
-                       onClick={() => handleToggle('darkMode')}
-                       className={`flex-1 p-4 rounded-2xl flex flex-col items-center gap-2 border-2 transition-all ${!toggles.darkMode ? 'border-brand-blue bg-white/10' : 'border-white/5 opacity-40'}`}>
-                        <Sun size={24} />
-                        <span className="text-[10px] font-bold uppercase">Light Mode</span>
-                     </button>
+            <div className="lg:col-span-4 space-y-6">
+               <div className="glass rounded-[2.5rem] p-8 border border-white/5">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-6">API Status</h4>
+                  <div className="space-y-4">
+                     <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                        <span className="text-xs font-bold text-white/60">Supabase</span>
+                        <div className="flex items-center gap-2">
+                           <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></div>
+                           <span className="text-[8px] font-black text-brand-green">ONLINE</span>
+                        </div>
+                     </div>
+                     <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                        <span className="text-xs font-bold text-white/60">Vercel Edge</span>
+                        <div className="flex items-center gap-2">
+                           <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse"></div>
+                           <span className="text-[8px] font-black text-brand-green">STABLE</span>
+                        </div>
+                     </div>
                   </div>
                </div>
 
-               <div className="glass p-8 rounded-[2.5rem] border border-white/5 space-y-6">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-white/40">API Status</h4>
-                  <div className="space-y-4">
-                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase text-white/20">Supabase</span>
-                        <div className="flex items-center gap-2">
-                           <div className="w-2 h-2 rounded-full bg-brand-green"></div>
-                           <span className="text-[10px] font-black text-brand-green">ONLINE</span>
-                        </div>
-                     </div>
-                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase text-white/20">Vercel Edge</span>
-                        <div className="flex items-center gap-2">
-                           <div className="w-2 h-2 rounded-full bg-brand-green"></div>
-                           <span className="text-[10px] font-black text-brand-green">STABLE</span>
-                        </div>
-                     </div>
+               <div className="glass rounded-[2.5rem] p-8 border border-white/5">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-6">Visual Theme</h4>
+                  <div className="flex gap-2">
+                     <button className="flex-1 p-3 bg-brand-green text-black rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+                        <Sun size={14} /> Light
+                     </button>
+                     <button className="flex-1 p-3 bg-white/10 text-white rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+                        <Moon size={14} /> Dark
+                     </button>
                   </div>
-                  <button className="w-full py-4 rounded-2xl bg-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
-                     View System Logs
-                  </button>
                </div>
             </div>
-
           </div>
         </div>
 
         {/* Footer */}
-        <div className="p-10 bg-white/5 border-t border-white/10 flex items-center justify-between">
-           <div className="text-[10px] font-black uppercase tracking-widest text-white/20">Version 1.0.4-stable • Build 202505</div>
+        <div className="p-10 border-t border-white/10 flex items-center justify-between bg-white/[0.02]">
+           <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">Version 1.0.4-stable • Build 202505</p>
            <div className="flex gap-4">
-              <button onClick={onClose} className="px-8 py-3 rounded-xl font-bold text-sm text-white/40 hover:text-white">Close</button>
+              <button onClick={onClose} className="px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/5 transition-colors">Cancel</button>
               <button 
                 onClick={handleApply}
                 disabled={isSaving}
-                className="px-10 py-3 rounded-xl gradient-green text-black font-black uppercase tracking-widest text-sm shadow-xl shadow-brand-green/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="gradient-green text-black px-12 py-3 rounded-xl font-black uppercase text-xs tracking-widest shadow-[0_0_30px_rgba(57,255,20,0.3)] flex items-center gap-2 disabled:opacity-50"
               >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    Applying...
-                  </>
-                ) : 'Apply Settings'}
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : 'Apply Changes'}
               </button>
            </div>
         </div>

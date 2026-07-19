@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Loader2, LogIn, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, LogIn, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole } from '../../lib/supabase';
+import AppBackground from '../../components/AppBackground';
 
 interface LoginPageProps {
   onNavigate: (page: string) => void;
@@ -21,7 +22,18 @@ export default function LoginPage({ onNavigate, showBackButton = false }: LoginP
     setError(null);
     setLoading(true);
 
-    const { error, role } = await signIn(identifier, password);
+    // Determine if identifier is email, phone, or username
+    let email = identifier;
+    let phone: string | undefined = undefined;
+    
+    // Check if it's a phone number (starts with + or contains only digits/spaces/dashes)
+    const cleanIdentifier = identifier.replace(/[\s\-\(\)]/g, '');
+    if (/^\+?\d+$/.test(cleanIdentifier)) {
+      phone = identifier;
+      email = ''; // Supabase requires email field, but we'll use phone
+    }
+
+    const { error, role } = await signIn(email, password, phone);
 
     if (error) {
       setError(error);
@@ -36,47 +48,49 @@ export default function LoginPage({ onNavigate, showBackButton = false }: LoginP
   };
 
   const navigateToPortal = (role: UserRole) => {
+    // Use hash routing for SPA
     switch (role) {
       case 'admin':
-        onNavigate('admin-portal');
+        window.location.hash = '/admin';
         break;
       case 'fan':
-        onNavigate('fan-portal');
+        window.location.hash = '/';
         break;
       case 'team_manager':
-        onNavigate('team-portal');
+        window.location.hash = '/team-owner';
         break;
       case 'media':
-        onNavigate('media-portal');
+        window.location.hash = '/media-portal';
         break;
       default:
-        onNavigate('home');
+        window.location.hash = '/';
     }
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen relative flex items-center justify-center px-4 overflow-hidden">
+      <AppBackground />
+
+      {/* Content */}
+      <div className="relative z-10 w-full max-w-md">
         {/* Back Button */}
-        {showBackButton && (
-          <button
-            onClick={() => onNavigate('home')}
-            className="absolute top-8 left-8 flex items-center gap-2 text-white/40 hover:text-white transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span className="text-sm font-bold">Back to Home</span>
-          </button>
-        )}
+        <button
+          onClick={() => window.history.back()}
+          className="absolute top-4 left-4 flex items-center gap-2 text-white/60 hover:text-white transition-colors z-20"
+        >
+          <ArrowLeft size={20} />
+          <span className="text-sm font-bold">Back</span>
+        </button>
 
         {/* Logo */}
-        <div className="text-center mb-10">
-          <div className="w-20 h-20 mx-auto mb-6">
+        <div className="text-center mb-8">
+          <div className="w-24 h-24 mx-auto mb-6 rounded-3xl overflow-hidden shadow-2xl shadow-brand-green/20">
             <img src="/kicklive-icon.png" alt="KickLive" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-3xl font-black italic uppercase tracking-tighter">
+          <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">
             Welcome Back
           </h1>
-          <p className="text-white/40 text-sm mt-2">Sign in to KickLive Portal</p>
+          <p className="text-white/60 text-sm mt-2">Sign in to continue</p>
         </div>
 
         {/* Login Form */}
@@ -89,13 +103,13 @@ export default function LoginPage({ onNavigate, showBackButton = false }: LoginP
 
           <div className="space-y-2">
             <label className="text-xs font-black uppercase tracking-widest text-white/40">
-              Username or Email
+              Username, Email or Phone
             </label>
             <input
               type="text"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="Enter username or email"
+              placeholder="Enter username, email or phone number"
               required
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-brand-green/50 transition-colors"
             />
@@ -130,7 +144,13 @@ export default function LoginPage({ onNavigate, showBackButton = false }: LoginP
             className="w-full gradient-green text-black font-black uppercase tracking-widest py-4 rounded-xl flex items-center justify-center gap-3 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
-              <Loader2 size={20} className="animate-spin" />
+              <div className="relative w-8 h-8">
+                <div className="absolute inset-0 border-2 border-black/30 rounded-full"></div>
+                <div className="absolute inset-0 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs font-black"></span>
+                </div>
+              </div>
             ) : (
               <>
                 <LogIn size={20} />
@@ -147,55 +167,15 @@ export default function LoginPage({ onNavigate, showBackButton = false }: LoginP
             >
               Forgot Password?
             </button>
-            {showBackButton && (
-              <button
-                type="button"
-                onClick={() => window.history.back()}
-                className="text-[10px] text-white/40 font-bold hover:text-white transition-colors flex items-center gap-1"
-              >
-                <ArrowLeft size={12} /> Back
-              </button>
-            )}
-          </div>
-
-          <div className="text-center pt-4 border-t border-white/10">
-            <p className="text-white/40 text-sm">
-              Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => onNavigate('signup')}
-                className="text-brand-green font-bold hover:underline"
-              >
-                Sign Up
-              </button>
-            </p>
+            <button
+              type="button"
+              onClick={() => onNavigate('signup')}
+              className="text-[10px] text-white/40 font-bold hover:text-white transition-colors flex items-center gap-1"
+            >
+              No account? <span className="text-brand-green">Sign Up</span>
+            </button>
           </div>
         </form>
-
-        {/* Role Info */}
-        <div className="mt-8 glass-light rounded-2xl p-6">
-          <h3 className="text-xs font-black uppercase tracking-widest text-white/30 mb-4">
-            Portal Access
-          </h3>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-brand-green"></div>
-              <span className="text-white/60">Admin Portal</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-brand-blue"></div>
-              <span className="text-white/60">Fan Portal</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-              <span className="text-white/60">Team Manager</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-              <span className="text-white/60">Media Portal</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

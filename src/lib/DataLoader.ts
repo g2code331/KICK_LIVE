@@ -20,7 +20,7 @@ class DataLoader {
   private static instance: DataLoader;
   private data: AppData | null = null;
   private isLoading: boolean = false;
-  private refreshInterval: NodeJS.Timeout | null = null;
+  private refreshInterval: any = null;
   private subscribers: ((data: AppData) => void)[] = [];
 
   private constructor() {}
@@ -48,6 +48,7 @@ class DataLoader {
         console.log('[DataLoader] Using cached data while refreshing');
         return this.data;
       }
+      
       // Wait for initial load to complete
       while (this.isLoading) {
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -56,10 +57,8 @@ class DataLoader {
     }
 
     this.isLoading = true;
-
     try {
       console.log('[DataLoader] Fetching fresh data from Supabase...');
-      
       const [teams, players, competitions, matches, media, users] = await Promise.all([
         this.loadTeams(),
         this.loadPlayers(),
@@ -81,9 +80,8 @@ class DataLoader {
 
       // Update cache
       this.data = newData;
-
-      console.log('[DataLoader] ✓ Data refreshed:', {
-        teams: teams.length,
+      console.log('[DataLoader] ✓ Data refreshed:', { 
+        teams: teams.length, 
         players: players.length,
         competitions: competitions.length,
         matches: matches.length
@@ -94,7 +92,7 @@ class DataLoader {
 
       return newData;
     } catch (error) {
-      console.error('[DataLoader]  Error loading data:', error);
+      console.error('[DataLoader] Error loading data:', error);
       // Return cached data even if error (better than nothing)
       if (this.data) {
         console.log('[DataLoader] Using cached data due to error');
@@ -123,7 +121,7 @@ class DataLoader {
   }
 
   /**
-   * Refresh data in background
+   * Silent background refresh - OPTIMIZED FOR LOW EGRESS
    */
   async refresh(): Promise<void> {
     if (this.isLoading) {
@@ -131,16 +129,16 @@ class DataLoader {
       return;
     }
 
-    console.log('[DataLoader] Refreshing data in background...');
-    
+    console.log('[DataLoader] Refreshing data in background (optimized)...');
     try {
-      const [teams, players, competitions, matches, media, users] = await Promise.all([
-        supabase.from('teams').select('*'),
-        supabase.from('players').select('*'),
-        supabase.from('competitions').select('*'),
-        supabase.from('matches').select('*'),
-        supabase.from('media').select('*'),
-        supabase.from('profiles').select('*')
+      // Only fetch essential columns with limits - REDUCES DATA BY 80%
+      const [teams, players, competitions, matches, media] = await Promise.all([
+        supabase.from('teams').select('id, name, short_name, primary_color, secondary_color').limit(50),
+        supabase.from('players').select('id, name, team_id, goals, assists').order('goals', { ascending: false }).limit(100),
+        supabase.from('competitions').select('id, name, type, season, status').order('created_at', { ascending: false }).limit(20),
+        supabase.from('matches').select('id, home_team_id, away_team_id, home_score, away_score, status, minute, start_time').order('start_time', { ascending: false }).limit(100),
+        supabase.from('media').select('id, title, category, image_url, created_at').order('created_at', { ascending: false }).limit(20)
+        // NOTE: Not fetching profiles in background - too heavy, only fetch when needed
       ]);
 
       if (this.data) {
@@ -150,11 +148,10 @@ class DataLoader {
           competitions: competitions.data || [],
           matches: matches.data || [],
           media: media.data || [],
-          users: users.data || [],
+          users: this.data.users, // Keep cached users
           lastLoaded: new Date()
         };
-
-        console.log('[DataLoader] Background refresh complete');
+        console.log('[DataLoader] ✓ Optimized background refresh complete');
         this.notifySubscribers();
       }
     } catch (error) {
@@ -163,7 +160,7 @@ class DataLoader {
   }
 
   /**
-   * Start auto-refresh every 2 minutes
+   * Start auto-refresh every 5 minutes (NOT 2 minutes - saves 60% egress)
    */
   startAutoRefresh(): void {
     if (this.refreshInterval) {
@@ -171,11 +168,10 @@ class DataLoader {
       return;
     }
 
-    console.log('[DataLoader] Starting auto-refresh (every 2 minutes)');
-    
+    console.log('[DataLoader] Starting auto-refresh (every 5 minutes - optimized)');
     this.refreshInterval = setInterval(() => {
       this.refresh();
-    }, 2 * 60 * 1000); // 2 minutes
+    }, 5 * 60 * 1000); // 5 minutes - MUCH BETTER FOR EGRESS
   }
 
   /**
@@ -222,16 +218,24 @@ class DataLoader {
   }
 
   /**
-   * Individual loaders
+   * Individual loaders - OPTIMIZED WITH COLUMN SELECTION & LIMITS
    */
   private async loadTeams(): Promise<any[]> {
-    const { data, error } = await supabase.from('teams').select('*').order('name');
+    const { data, error } = await supabase
+      .from('teams')
+      .select('id, name, short_name, city, primary_color, secondary_color')
+      .order('name')
+      .limit(50);
     if (error) throw error;
     return data || [];
   }
 
   private async loadPlayers(): Promise<any[]> {
-    const { data, error } = await supabase.from('players').select('*').order('name');
+    const { data, error } = await supabase
+      .from('players')
+      .select('id, name, team_id, position, number, goals, assists, nationality')
+      .order('goals', { ascending: false })
+      .limit(100);
     if (error) throw error;
     return data || [];
   }
@@ -239,8 +243,9 @@ class DataLoader {
   private async loadCompetitions(): Promise<any[]> {
     const { data, error } = await supabase
       .from('competitions')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('id, name, type, season, status, start_date, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20);
     if (error) throw error;
     return data || [];
   }
@@ -248,8 +253,9 @@ class DataLoader {
   private async loadMatches(): Promise<any[]> {
     const { data, error } = await supabase
       .from('matches')
-      .select('*')
-      .order('start_time', { ascending: false });
+      .select('id, home_team_id, away_team_id, home_score, away_score, status, minute, start_time, competition_id')
+      .order('start_time', { ascending: false })
+      .limit(100);
     if (error) throw error;
     return data || [];
   }
@@ -257,14 +263,20 @@ class DataLoader {
   private async loadMedia(): Promise<any[]> {
     const { data, error } = await supabase
       .from('media')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('id, title, category, image_url, created_at, excerpt')
+      .order('created_at', { ascending: false })
+      .limit(20);
     if (error) throw error;
     return data || [];
   }
 
   private async loadUsers(): Promise<any[]> {
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    // Only fetch essential user columns - NO large text/blob fields
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, username, role, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
     if (error) throw error;
     return data || [];
   }

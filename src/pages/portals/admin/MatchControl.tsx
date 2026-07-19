@@ -1,351 +1,271 @@
 import { useState, useEffect } from 'react';
-import { Play, Pause, CheckCircle, Activity, MessageSquare } from 'lucide-react';
+import { X, Play, Pause, RotateCcw, Clock, CheckCircle, AlertCircle, Plus, MessageSquare, Activity } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 
 interface MatchControlProps {
-  matchId?: number;
+  match: any;
+  isOpen: boolean;
+  onClose: () => void;
+  onUpdate: () => void;
 }
 
-export default function MatchControl({ matchId }: MatchControlProps) {
-  const [match, setMatch] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [matchStatus, setMatchStatus] = useState('waiting');
-  const [minute, setMinute] = useState(0);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [homeScore, setHomeScore] = useState(0);
-  const [awayScore, setAwayScore] = useState(0);
-  const [homeTeam, setHomeTeam] = useState<any>(null);
-  const [awayTeam, setAwayTeam] = useState<any>(null);
-  const [events, setEvents] = useState<any[]>([]);
+export default function MatchControl({ match, isOpen, onClose, onUpdate }: MatchControlProps) {
+  const [status, setStatus] = useState(match?.status || 'waiting');
+  const [homeScore, setHomeScore] = useState(match?.home_score || 0);
+  const [awayScore, setAwayScore] = useState(match?.away_score || 0);
+  const [minute, setMinute] = useState(match?.minute || 0);
+  const [isTimerRunning, setIsTimerRunning] = useState(match?.status === 'live');
   const [activeTab, setActiveTab] = useState<'events' | 'commentary'>('events');
+  const [events, setEvents] = useState<any[]>([]);
   const [commentary, setCommentary] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
 
   useEffect(() => {
-    if (matchId) loadMatch();
-  }, [matchId]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerRunning && !['half_time', 'full_time', 'waiting'].includes(matchStatus)) {
-      interval = setInterval(() => {
-        setMinute(m => {
-          if (m >= 45 && matchStatus === 'first_half') return 45;
-          if (m >= 90 && matchStatus === 'second_half') return 90;
+    if (isTimerRunning && status !== 'waiting' && status !== 'full_time') {
+      const interval = setInterval(() => {
+        setMinute((m: number) => {
+          if (m >= 90) {
+            setIsTimerRunning(false);
+            return 90;
+          }
           return m + 1;
         });
       }, 60000);
+      return () => clearInterval(interval);
     }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, matchStatus]);
+  }, [isTimerRunning, status]);
 
-  async function loadMatch() {
-    try {
-      const { data } = await supabase
-        .from('matches')
-        .select('*, homeTeam:teams!home_team_id(*), awayTeam:teams!away_team_id(*)')
-        .eq('id', matchId)
-        .single();
-      
-      if (data) {
-        setMatch(data);
-        setHomeTeam(data.homeTeam);
-        setAwayTeam(data.awayTeam);
-        setHomeScore(data.home_score || 0);
-        setAwayScore(data.away_score || 0);
-        setMatchStatus(data.status || 'waiting');
-        setMinute(data.minute || 0);
-        
-        const { data: eventsData } = await supabase
-          .from('match_events')
-          .select('*')
-          .eq('match_id', matchId)
-          .order('minute', { ascending: true });
-        setEvents(eventsData || []);
-        
-        const { data: commData } = await supabase
-          .from('match_commentary')
-          .select('*')
-          .eq('match_id', matchId)
-          .order('minute', { ascending: true });
-        setCommentary(commData || []);
-      }
-    } catch (err) {
-      console.error('Error loading match:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const startMatch = async () => {
-    setMatchStatus('first_half');
+  const handleKickoff = async () => {
+    setStatus('first_half');
     setIsTimerRunning(true);
     await addEvent('kickoff', 0);
     await updateMatch();
   };
 
-  const pauseMatch = async () => {
+  const handlePause = async () => {
     setIsTimerRunning(false);
     await updateMatch();
   };
 
-  const resumeMatch = async () => {
+  const handleResume = async () => {
     setIsTimerRunning(true);
     await updateMatch();
   };
 
-  const endHalf = async () => {
+  const handleHalfTime = async () => {
+    setStatus('half_time');
     setIsTimerRunning(false);
-    if (matchStatus === 'first_half') {
-      setMatchStatus('half_time');
-      await addEvent('half_time', minute);
-    } else {
-      setMatchStatus('full_time');
-      await addEvent('match_ended', minute);
-      await finalizeMatch();
-    }
+    await addEvent('half_time', minute);
+    await updateMatch();
+  };
+
+  const handleFullTime = async () => {
+    setStatus('full_time');
+    setIsTimerRunning(false);
+    await addEvent('full_time', minute);
     await updateMatch();
   };
 
   const updateMatch = async () => {
     try {
-      await supabase.from('matches').update({ 
-        status: matchStatus, minute,
-        status_detail: matchStatus.replace('_', ' ').toUpperCase()
-      }).eq('id', matchId);
+      await supabase.from('matches').update({
+        home_score: homeScore,
+        away_score: awayScore,
+        minute: minute,
+        status: status
+      }).eq('id', match.id);
+      onUpdate();
     } catch (err) {
       console.error('Error updating match:', err);
     }
   };
 
-  const addEvent = async (eventType: string, minute: number, data?: any) => {
+  const addEvent = async (eventType: string, matchMinute: number) => {
     try {
       await supabase.from('match_events').insert([{
-        match_id: matchId, event_type: eventType, minute,
-        team_id: data?.teamId, player_id: data?.playerId,
-        description: data?.description
+        match_id: match.id,
+        event_type: eventType,
+        minute: matchMinute
       }]);
-      loadMatch();
     } catch (err) {
       console.error('Error adding event:', err);
     }
-  };
-
-  const addGoal = async (teamId: number) => {
-    const isHome = teamId === homeTeam?.id;
-    const newScore = isHome ? homeScore + 1 : awayScore + 1;
-    
-    if (isHome) {
-      setHomeScore(newScore);
-      await supabase.from('matches').update({ home_score: newScore }).eq('id', matchId);
-    } else {
-      setAwayScore(newScore);
-      await supabase.from('matches').update({ away_score: newScore }).eq('id', matchId);
-    }
-    
-    await addEvent('goal', minute, { teamId, description: 'GOAL!' });
-  };
-
-  const addCard = async (teamId: number, cardType: 'yellow' | 'red') => {
-    await addEvent(cardType === 'yellow' ? 'yellow_card' : 'red_card', minute, { teamId });
   };
 
   const addCommentary = async () => {
     if (!newComment.trim()) return;
     try {
       await supabase.from('match_commentary').insert([{
-        match_id: matchId, minute, comment: newComment
+        match_id: match.id,
+        minute: minute,
+        comment: newComment
       }]);
       setNewComment('');
-      loadMatch();
+      loadCommentary();
     } catch (err) {
       console.error('Error adding commentary:', err);
     }
   };
 
-  const finalizeMatch = async () => {
-    try {
-      await supabase.from('matches').update({
-        status: 'finished', is_locked: true,
-        confirmed_at: new Date().toISOString()
-      }).eq('id', matchId);
-      alert('Match finalized! Standings will update automatically.');
-    } catch (err) {
-      console.error('Error finalizing match:', err);
-    }
+  const loadCommentary = async () => {
+    const { data } = await supabase.from('match_commentary')
+      .select('*')
+      .eq('match_id', match.id)
+      .order('minute', { ascending: true });
+    setCommentary(data || []);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-brand-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-brand-green font-bold uppercase">Loading Match Control...</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (isOpen) loadCommentary();
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   return (
-    <div className="min-h-screen bg-[#0B0E13] p-4 lg:p-8">
-      <div className="container mx-auto">
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#0B0E13]/95 backdrop-blur-xl" onClick={onClose}></div>
+      <div className="relative w-full max-w-5xl glass rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col h-[85vh]">
+        
         {/* Header */}
-        <div className="glass rounded-2xl p-6 mb-6 border border-white/10">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
-                <Activity className="text-red-500" size={24} />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black uppercase">Match Control</h1>
-                <p className="text-xs text-white/40">{match?.competition || 'Competition'}</p>
-              </div>
-            </div>
-            <div className={`px-4 py-2 rounded-xl font-black uppercase text-sm ${
-              isTimerRunning ? 'bg-red-500/20 text-red-500 animate-pulse' : 'bg-white/5 text-white/40'
-            }`}>
+        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+          <div>
+            <h2 className="text-xl font-black italic uppercase tracking-tighter">Match Control</h2>
+            <p className="text-[10px] text-white/40 uppercase tracking-widest">{match?.competition || 'Competition'}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${isTimerRunning ? 'bg-brand-red text-white' : 'bg-white/10 text-white/40'}`}>
               {isTimerRunning ? '🔴 LIVE' : 'PAUSED'}
-            </div>
-          </div>
-          
-          {/* Scoreboard */}
-          <div className="glass rounded-2xl p-8 bg-gradient-to-r from-brand-blue/10 via-transparent to-brand-green/10 border border-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <span className="text-3xl font-black">{homeTeam?.short_name?.[0] || 'H'}</span>
-                </div>
-                <h2 className="text-xl font-black uppercase">{homeTeam?.name || 'Home'}</h2>
-              </div>
-              
-              <div className="flex-1 text-center px-8">
-                <div className="text-6xl font-black mb-4">
-                  <span className="text-brand-green">{homeScore}</span>
-                  <span className="text-white/30 mx-4">-</span>
-                  <span className="text-brand-green">{awayScore}</span>
-                </div>
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <span className="text-3xl font-black">{minute}'</span>
-                </div>
-                <div className="text-sm font-black uppercase text-white/40">{matchStatus.replace('_', ' ')}</div>
-              </div>
-              
-              <div className="flex-1 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <span className="text-3xl font-black">{awayTeam?.short_name?.[0] || 'A'}</span>
-                </div>
-                <h2 className="text-xl font-black uppercase">{awayTeam?.name || 'Away'}</h2>
-              </div>
-            </div>
-          </div>
-          
-          {/* Controls */}
-          <div className="flex items-center justify-center gap-4 mt-6">
-            {matchStatus === 'waiting' && (
-              <button onClick={startMatch} className="flex items-center gap-2 px-8 py-4 rounded-xl bg-brand-green text-black font-black uppercase hover:scale-105 transition-all">
-                <Play size={20} /> Kick Off
-              </button>
-            )}
-            {isTimerRunning ? (
-              <button onClick={pauseMatch} className="flex items-center gap-2 px-8 py-4 rounded-xl bg-orange-500 text-white font-black uppercase hover:scale-105 transition-all">
-                <Pause size={20} /> Pause
-              </button>
-            ) : matchStatus !== 'waiting' && matchStatus !== 'full_time' && (
-              <button onClick={resumeMatch} className="flex items-center gap-2 px-8 py-4 rounded-xl bg-brand-green text-black font-black uppercase hover:scale-105 transition-all">
-                <Play size={20} /> Resume
-              </button>
-            )}
-            {(matchStatus === 'first_half' || matchStatus === 'second_half') && (
-              <button onClick={endHalf} className="flex items-center gap-2 px-8 py-4 rounded-xl bg-red-500 text-white font-black uppercase hover:scale-105 transition-all">
-                <CheckCircle size={20} /> {matchStatus === 'first_half' ? 'Half Time' : 'Full Time'}
-              </button>
-            )}
+            </span>
+            <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-full"><X /></button>
           </div>
         </div>
-        
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <button onClick={() => addGoal(homeTeam?.id)} className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-500 font-black uppercase hover:bg-green-500/20 transition-all">
-            ⚽ Home Goal
-          </button>
-          <button onClick={() => addGoal(awayTeam?.id)} className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-500 font-black uppercase hover:bg-green-500/20 transition-all">
-            ⚽ Away Goal
-          </button>
-          <button onClick={() => addCard(homeTeam?.id, 'yellow')} className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 font-black uppercase hover:bg-yellow-500/20 transition-all">
-            🟨 Home Yellow
-          </button>
-          <button onClick={() => addCard(awayTeam?.id, 'yellow')} className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 font-black uppercase hover:bg-yellow-500/20 transition-all">
-            🟨 Away Yellow
-          </button>
+
+        {/* Scoreboard */}
+        <div className="p-12 flex items-center justify-around">
+          <div className="text-center">
+            <div className="w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl font-black italic mb-4">
+              {match?.homeTeam?.short_name?.[0] || 'H'}
+            </div>
+            <h3 className="text-sm font-black uppercase tracking-widest">{match?.homeTeam?.name || 'Home'}</h3>
+          </div>
+
+          <div className="text-center">
+            <div className="text-6xl font-black italic tracking-tighter mb-4">
+              <span className="text-brand-green">{homeScore}</span>
+              <span className="text-white/10 mx-4">-</span>
+              <span className="text-brand-green">{awayScore}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock size={20} className="text-brand-green" />
+              <span className="text-2xl font-black italic text-brand-green">{minute}'</span>
+            </div>
+            <p className="text-xs text-white/40 uppercase mt-2">{status.replace('_', ' ')}</p>
+          </div>
+
+          <div className="text-center">
+            <div className="w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl font-black italic mb-4">
+              {match?.awayTeam?.short_name?.[0] || 'A'}
+            </div>
+            <h3 className="text-sm font-black uppercase tracking-widest">{match?.awayTeam?.name || 'Away'}</h3>
+          </div>
         </div>
-        
-        {/* Tabs */}
-        <div className="flex items-center gap-2 mb-6">
-          {[
-            { id: 'events', label: 'Events', icon: <Activity size={16} /> },
-            { id: 'commentary', label: 'Commentary', icon: <MessageSquare size={16} /> },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm uppercase transition-all ${
-              activeTab === tab.id ? 'bg-brand-green text-black' : 'bg-white/5 text-white/40 hover:text-white'
-            }`}>
-              {tab.icon} {tab.label}
+
+        {/* Controls */}
+        <div className="px-12 pb-8 grid grid-cols-4 gap-4">
+          {status === 'waiting' && (
+            <button onClick={handleKickoff} className="gradient-green text-black py-4 rounded-xl font-black uppercase tracking-widest">
+              Kick Off
             </button>
-          ))}
+          )}
+          {isTimerRunning ? (
+            <button onClick={handlePause} className="bg-yellow-500 text-black py-4 rounded-xl font-black uppercase tracking-widest">
+              Pause
+            </button>
+          ) : status !== 'waiting' && status !== 'full_time' && (
+            <button onClick={handleResume} className="gradient-green text-black py-4 rounded-xl font-black uppercase tracking-widest">
+              Resume
+            </button>
+          )}
+          {(status === 'first_half' || status === 'second_half') && (
+            <button onClick={handleHalfTime} className="bg-brand-blue text-black py-4 rounded-xl font-black uppercase tracking-widest">
+              Half Time
+            </button>
+          )}
+          {status === 'half_time' && (
+            <button onClick={() => setStatus('second_half')} className="gradient-green text-black py-4 rounded-xl font-black uppercase tracking-widest">
+              Second Half
+            </button>
+          )}
+          {(status === 'first_half' || status === 'second_half') && (
+            <button onClick={handleFullTime} className="bg-brand-red text-white py-4 rounded-xl font-black uppercase tracking-widest">
+              Full Time
+            </button>
+          )}
         </div>
-        
+
+        {/* Tabs */}
+        <div className="px-8 border-t border-white/10 flex gap-4">
+          <button
+            onClick={() => setActiveTab('events')}
+            className={`flex items-center gap-2 px-6 py-4 rounded-t-xl font-black uppercase tracking-widest text-sm ${activeTab === 'events' ? 'bg-white/10 text-white' : 'text-white/40'}`}
+          >
+            <Activity size={16} /> Events
+          </button>
+          <button
+            onClick={() => setActiveTab('commentary')}
+            className={`flex items-center gap-2 px-6 py-4 rounded-t-xl font-black uppercase tracking-widest text-sm ${activeTab === 'commentary' ? 'bg-white/10 text-white' : 'text-white/40'}`}
+          >
+            <MessageSquare size={16} /> Commentary
+          </button>
+        </div>
+
         {/* Events Tab */}
         {activeTab === 'events' && (
-          <div className="glass rounded-2xl p-6 border border-white/10">
-            <h3 className="text-xl font-black uppercase mb-6">Match Events</h3>
-            <div className="space-y-4">
-              {events.map((event) => (
-                <div key={event.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="w-16 text-center">
-                    <span className="text-lg font-black text-brand-green">{event.minute}'</span>
-                  </div>
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    event.event_type === 'goal' ? 'bg-green-500/20 text-green-500' :
-                    event.event_type.includes('card') ? 'bg-yellow-500/20 text-yellow-500' :
-                    'bg-blue-500/20 text-blue-500'
-                  }`}>
+          <div className="flex-1 overflow-y-auto p-8">
+            <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Match Events</h3>
+            <div className="space-y-2">
+              {events.map((event, i) => (
+                <div key={i} className="flex items-center gap-4 p-4 rounded-xl bg-white/5">
+                  <span className="text-sm font-black text-brand-green w-12">{event.minute}'</span>
+                  <span className="text-lg">
                     {event.event_type === 'goal' ? '⚽' : event.event_type.includes('card') ? '🟨' : '📋'}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-bold uppercase">{event.event_type.replace('_', ' ')}</p>
-                    <p className="text-xs text-white/40">{event.description || ''}</p>
-                  </div>
+                  </span>
+                  <span className="text-sm">{event.event_type.replace('_', ' ')} {event.description || ''}</span>
                 </div>
               ))}
               {events.length === 0 && (
-                <div className="text-center py-12 text-white/40">
-                  <p>No events yet. Kick off to start!</p>
-                </div>
+                <p className="text-white/40 text-center py-8">No events yet. Kick off to start!</p>
               )}
             </div>
           </div>
         )}
-        
+
         {/* Commentary Tab */}
         {activeTab === 'commentary' && (
-          <div className="glass rounded-2xl p-6 border border-white/10">
-            <h3 className="text-xl font-black uppercase mb-6">Live Commentary</h3>
-            <div className="flex gap-4 mb-6">
-              <input type="text" value={newComment} onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Type commentary..." className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-green/50"
-                onKeyPress={(e) => e.key === 'Enter' && addCommentary()} />
-              <button onClick={addCommentary} className="px-6 py-3 rounded-xl bg-brand-green text-black font-black uppercase hover:scale-105 transition-all">Post</button>
+          <div className="flex-1 overflow-y-auto p-8 flex flex-col">
+            <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Live Commentary</h3>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Type commentary..."
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-green/50"
+                onKeyPress={(e) => e.key === 'Enter' && addCommentary()}
+              />
+              <button onClick={addCommentary} className="gradient-green text-black px-6 rounded-xl font-black uppercase tracking-widest">
+                Post
+              </button>
             </div>
-            <div className="space-y-4 max-h-[500px] overflow-y-auto">
-              {commentary.map((comm) => (
-                <div key={comm.id} className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <span className="text-brand-green font-black">{comm.minute}'</span>
-                  <p className="mt-2">{comm.comment}</p>
+            <div className="flex-1 space-y-2">
+              {commentary.map((comm, i) => (
+                <div key={i} className="p-4 rounded-xl bg-white/5">
+                  <span className="text-sm font-black text-brand-green">{comm.minute}'</span>
+                  <span className="text-sm ml-2">{comm.comment}</span>
                 </div>
               ))}
               {commentary.length === 0 && (
-                <div className="text-center py-12 text-white/40">
-                  <p>No commentary yet. Start typing!</p>
-                </div>
+                <p className="text-white/40 text-center py-8">No commentary yet. Start typing!</p>
               )}
             </div>
           </div>

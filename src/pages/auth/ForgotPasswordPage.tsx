@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -79,7 +79,7 @@ export default function ForgotPasswordPage({ onNavigate }: ForgotPasswordPagePro
         ) : (
           <form onSubmit={handleSubmit} className="glass rounded-3xl p-8 space-y-6">
             {error && (
-              <div className="bg-brand-red/10 border border-brand-red/30 text-brand-red px-4 py-3 rounded-xl text-sm">
+              <div className="bg-brand-red/10 border border-brand-red/30 text-brand-red px-4 py-3 rounded-xl text-sm font-medium">
                 {error}
               </div>
             )}

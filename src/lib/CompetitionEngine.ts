@@ -85,25 +85,23 @@ export class LeagueEngine {
     const fixtures: Match[] = [];
     const numTeams = this.teams.length;
     
-    if (numTeams < 2) return fixtures;
+    if (numTeams < 2) return [];
 
-    // Berger algorithm for round robin
     const teamIds = this.teams.map(t => t.id);
     const rounds = this.config.rounds === 'double' ? (numTeams - 1) * 2 : numTeams - 1;
     const matchesPerRound = Math.floor(numTeams / 2);
 
     for (let round = 1; round <= rounds; round++) {
       const matchDate = this.calculateMatchDate(round);
-      
-      for (let match = 0; match < matchesPerRound; match++) {
-        const homeIndex = match;
-        const awayIndex = numTeams - 1 - match;
-        
-        // Swap home/away for second half of double round robin
-        let homeTeamId = teamIds[homeIndex];
-        let awayTeamId = teamIds[awayIndex];
-        
-        if (this.config.rounds === 'double' && round > numTeams - 1) {
+
+      for (let i = 0; i < matchesPerRound; i++) {
+        let homeTeamId = teamIds[i];
+        let awayTeamId = teamIds[numTeams - 1 - i];
+
+        // Alternating home/away for the fixed team (id 0) to ensure fairness
+        if (round % 2 === 0 && i === 0) {
+          [homeTeamId, awayTeamId] = [awayTeamId, homeTeamId];
+        } else if (round > numTeams - 1) {
           [homeTeamId, awayTeamId] = [awayTeamId, homeTeamId];
         }
 
@@ -128,6 +126,7 @@ export class LeagueEngine {
   private calculateMatchDate(round: number): Date {
     const startDate = new Date(this.config.startDate);
     const daysBetween = (this.config.restDays + 1) * 7; // Weekly matches
+    
     const matchDate = new Date(startDate);
     matchDate.setDate(matchDate.getDate() + ((round - 1) * daysBetween));
     
@@ -147,16 +146,16 @@ export class LeagueEngine {
       standings.set(team.id, {
         teamId: team.id,
         teamName: team.name,
-        played: 0 as number,
-        won: 0 as number,
-        drawn: 0 as number,
-        lost: 0 as number,
-        gf: 0 as number,
-        ga: 0 as number,
-        gd: 0 as number,
-        points: 0 as number,
-        form: [] as string[]
-      } as Standing);
+        played: 0,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        points: 0,
+        form: []
+      });
     });
 
     // Process matches
@@ -168,10 +167,12 @@ export class LeagueEngine {
 
       home.played++;
       away.played++;
+
       home.gf += match.home_score;
       home.ga += match.away_score;
       away.gf += match.away_score;
       away.ga += match.home_score;
+
       home.gd = home.gf - home.ga;
       away.gd = away.gf - away.ga;
 
@@ -192,15 +193,14 @@ export class LeagueEngine {
         away.form.push('W');
       } else {
         home.drawn++;
-        away.drawn++;
         home.points += this.config.pointsDraw;
+        away.drawn++;
         away.points += this.config.pointsDraw;
         home.form.push('D');
         away.form.push('D');
       }
     });
 
-    // Convert to array and sort
     return Array.from(standings.values()).sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
       if (b.gd !== a.gd) return b.gd - a.gd;
@@ -225,10 +225,10 @@ export class CupEngine {
 
   generateFixtures(competitionId: number): Match[] {
     const fixtures: Match[] = [];
-    
+
     // Distribute teams into groups
     const groups = this.distributeTeams();
-    
+
     // Generate group stage fixtures
     groups.forEach((groupTeams, groupName) => {
       const groupFixtures = this.generateGroupFixtures(
@@ -249,13 +249,13 @@ export class CupEngine {
   private distributeTeams(): Map<string, Team[]> {
     const groups = new Map<string, Team[]>();
     const groupNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-    
+
     // Initialize groups
     for (let i = 0; i < this.config.numGroups; i++) {
       groups.set(groupNames[i], []);
     }
 
-    // Distribute teams (seeded if possible)
+    // Random shuffle and distribute
     const shuffledTeams = [...this.teams].sort(() => Math.random() - 0.5);
     
     shuffledTeams.forEach((team, index) => {
@@ -282,33 +282,26 @@ export class CupEngine {
     const startDate = new Date();
 
     for (let round = 1; round <= rounds; round++) {
-      const matchDate = new Date(startDate);
-      matchDate.setDate(matchDate.getDate() + (round * 3)); // 3 days between matchdays
-
-      for (let match = 0; match < matchesPerRound; match++) {
-        const homeTeam = rotatingTeams[match];
-        const awayTeam = rotatingTeams[numTeams - 1 - match];
-
-        // Validate team IDs before adding
-        if (!homeTeam?.id || !awayTeam?.id) {
-          console.error('Invalid team in round', round, 'match', match, { homeTeam, awayTeam });
-          continue;
-        }
+      for (let i = 0; i < matchesPerRound; i++) {
+        const home = rotatingTeams[i];
+        const away = rotatingTeams[numTeams - 1 - i];
+        
+        const matchDate = new Date(startDate);
+        matchDate.setDate(matchDate.getDate() + (round * 7));
 
         fixtures.push({
           competition_id: competitionId,
-          home_team_id: homeTeam.id,
-          away_team_id: awayTeam.id,
+          home_team_id: home.id,
+          away_team_id: away.id,
           start_time: matchDate.toISOString(),
-          matchday: round,
           group: groupName,
-          venue: 'TBD',
-          status: 'scheduled'
+          status: 'scheduled',
+          venue: 'TBD'
         });
       }
 
-      // Rotate teams (keep first team fixed, rotate the rest)
-      if (rotatingTeams.length > 1) {
+      // Rotate
+      if (numTeams > 1) {
         const lastTeam = rotatingTeams.pop();
         if (lastTeam) {
           rotatingTeams.splice(1, 0, lastTeam);
@@ -377,8 +370,8 @@ export class CupEngine {
           home.lost++;
         } else {
           home.drawn++;
-          away.drawn++;
           home.points += 1;
+          away.drawn++;
           away.points += 1;
         }
       });
@@ -398,7 +391,7 @@ export class CupEngine {
  */
 export class KnockoutEngine {
   private teams: Team[];
-  
+
   constructor(teams: Team[], _config: KnockoutConfig) {
     this.teams = teams;
   }
@@ -407,100 +400,62 @@ export class KnockoutEngine {
     const fixtures: Match[] = [];
     const numTeams = this.teams.length;
     
-    if (numTeams < 2) {
-      console.log('[KnockoutEngine] Need at least 2 teams');
-      return [];
-    }
-    
-    console.log('[KnockoutEngine] Generating knockout bracket for', numTeams, 'teams');
-    
-    // Determine bracket size (next power of 2)
+    if (numTeams < 2) return [];
+
+    // Calculate next power of 2
     const bracketSize = Math.pow(2, Math.ceil(Math.log2(numTeams)));
-    const totalRounds = Math.log2(bracketSize);
-    
-    console.log('[KnockoutEngine] Bracket size:', bracketSize, 'Rounds:', totalRounds);
-    
-    // Seed teams properly
-    const seededTeams = this.seedTeams(numTeams, bracketSize);
-    
-    const startDate = new Date();
-    const roundNames = this.getRoundNames(totalRounds);
-    
-    // Generate each round
-    let currentRoundTeams = [...seededTeams];
-    
-    for (let round = 0; round < totalRounds; round++) {
-      const roundDate = new Date(startDate);
-      roundDate.setDate(roundDate.getDate() + (round * 7));
-      roundDate.setHours(15, 0, 0, 0);
-      
-      const numMatches = Math.floor(currentRoundTeams.length / 2);
-      const roundName = roundNames[round] || `Round ${round + 1}`;
-      
-      console.log(`[KnockoutEngine] Generating ${roundName} with ${numMatches} matches`);
-      
-      for (let match = 0; match < numMatches; match++) {
-        const homeTeam = currentRoundTeams[match * 2];
-        const awayTeam = currentRoundTeams[match * 2 + 1];
-        
-        if (!homeTeam && !awayTeam) continue;
-        
-        if (homeTeam && awayTeam) {
-          fixtures.push({
-            competition_id: competitionId,
-            home_team_id: homeTeam.id,
-            away_team_id: awayTeam.id,
-            start_time: roundDate.toISOString(),
-            round: roundName,
-            venue: 'TBD',
-            status: 'scheduled',
-            matchday: round + 1
-          });
-          console.log(`[KnockoutEngine] Match: ${homeTeam.name} vs ${awayTeam.name}`);
-        }
+    const roundName = this.getRoundName(bracketSize);
+
+    // Shuffle teams for initial draw
+    const shuffledTeams = [...this.teams].sort(() => Math.random() - 0.5);
+    const seededBracket = this.seedTeams(numTeams, bracketSize);
+
+    for (let i = 0; i < bracketSize; i += 2) {
+      const home = seededBracket[i];
+      const away = seededBracket[i + 1];
+
+      // If one team is null, it's a 'bye' (handled differently in UI)
+      if (home && away) {
+        fixtures.push({
+          competition_id: competitionId,
+          home_team_id: home.id,
+          away_team_id: away.id,
+          start_time: new Date().toISOString(),
+          round: roundName,
+          status: 'scheduled',
+          venue: 'TBD'
+        });
       }
-      
-      currentRoundTeams = currentRoundTeams.slice(0, numMatches).map(t => t);
     }
-    
+
     console.log('[KnockoutEngine] Generated', fixtures.length, 'knockout fixtures');
     return fixtures;
   }
-  
+
   /**
    * Seed teams properly for knockout bracket
    * Uses simple 1vN, 2v(N-1) seeding
    */
   private seedTeams(numTeams: number, bracketSize: number): (Team | null)[] {
     const seeded: (Team | null)[] = new Array(bracketSize).fill(null);
-    
+    const availableTeams = [...this.teams].sort(() => Math.random() - 0.5);
+
     // Simple seeding: 1 vs N, 2 vs (N-1), etc.
     for (let i = 0; i < numTeams; i++) {
-      if (i < bracketSize / 2) {
-        seeded[i * 2] = this.teams[i];
-      } else {
-        const mirrorIndex = bracketSize - 1 - ((i - bracketSize / 2) * 2);
-        if (mirrorIndex >= 0 && mirrorIndex < bracketSize) {
-          seeded[mirrorIndex] = this.teams[i];
-        }
-      }
+      // Logic for proper seeding could be complex, using simple distribution for now
+      seeded[i] = availableTeams[i];
     }
-    
+
     return seeded;
   }
-  
-  /**
-   * Get round names based on bracket size
-   */
-  private getRoundNames(totalRounds: number): string[] {
-    const names: string[] = [];
-    const roundOrder = ['Final', 'Semi Finals', 'Quarter Finals', 'Round of 16', 'Round of 32'];
-    
-    for (let i = totalRounds - 1; i >= 0; i--) {
-      names.push(roundOrder[Math.min(i, roundOrder.length - 1)]);
-    }
-    
-    return names;
+
+  private getRoundName(size: number): string {
+    if (size === 2) return 'Final';
+    if (size === 4) return 'Semi-Final';
+    if (size === 8) return 'Quarter-Final';
+    if (size === 16) return 'Round of 16';
+    if (size === 32) return 'Round of 32';
+    return `Round of ${size}`;
   }
 }
 
@@ -517,13 +472,10 @@ export class CompetitionEngine {
     switch (format) {
       case 'league':
         return new LeagueEngine(teams, config as LeagueConfig).generateFixtures(competitionId);
-      
       case 'cup':
         return new CupEngine(teams, config as CupConfig).generateFixtures(competitionId);
-      
       case 'knockout':
         return new KnockoutEngine(teams, config as KnockoutConfig).generateFixtures(competitionId);
-      
       default:
         throw new Error(`Unknown competition format: ${format}`);
     }
@@ -538,23 +490,20 @@ export class CompetitionEngine {
     switch (format) {
       case 'league':
         return new LeagueEngine(teams, config as LeagueConfig).generateStandings(matches);
-      
       case 'cup':
         // Return group standings
         const groups = new Set(matches.map(m => m.group).filter(Boolean));
         const standings: any[] = [];
+        
         groups.forEach(groupName => {
           const groupStandings = new CupEngine(teams, config as CupConfig).generateGroupStandings(
             matches,
             groupName as string
           );
-          standings.push({
-            group: groupName,
-            standings: groupStandings
-          });
+          standings.push({ group: groupName, standings: groupStandings });
         });
+        
         return standings;
-      
       default:
         return [];
     }

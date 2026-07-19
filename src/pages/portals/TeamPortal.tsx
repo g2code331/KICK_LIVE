@@ -96,7 +96,7 @@ export default function TeamPortal({ onNavigate }: TeamPortalProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-8 overflow-y-auto">
         {activeTab === 'overview' && (
           <div className="space-y-8">
             <div>
@@ -126,159 +126,83 @@ export default function TeamPortal({ onNavigate }: TeamPortalProps) {
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">Losses</p>
               </div>
               <div className="glass rounded-2xl p-5 text-center">
-                <p className="text-2xl font-black italic">{teamStats.goalsFor}</p>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest">Goals For</p>
+                <p className="text-2xl font-black italic text-brand-blue">{teamStats.goalsFor}</p>
+                <p className="text-[10px] text-white/40 uppercase tracking-widest">GF</p>
               </div>
               <div className="glass rounded-2xl p-5 text-center">
-                <p className="text-2xl font-black italic">{teamStats.goalsAgainst}</p>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest">Against</p>
+                <p className="text-2xl font-black italic text-purple-500">{teamStats.goalsAgainst}</p>
+                <p className="text-[10px] text-white/40 uppercase tracking-widest">GA</p>
               </div>
             </div>
 
-            {/* Quick Actions & Upcoming */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Quick Actions */}
-              <div className="glass rounded-2xl p-6">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white/50 mb-6 flex items-center gap-2">
-                  <Activity size={16} />
-                  Quick Actions
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-left hover:bg-yellow-500/20 transition-colors">
-                    <UserPlus size={24} className="text-yellow-500 mb-3" />
-                    <p className="font-bold text-sm">Add Player</p>
-                    <p className="text-[10px] text-white/40 mt-1">Register new player</p>
-                  </button>
-                  <button className="p-4 rounded-xl bg-brand-blue/10 border border-brand-blue/30 text-left hover:bg-brand-blue/20 transition-colors">
-                    <FileText size={24} className="text-brand-blue mb-3" />
-                    <p className="font-bold text-sm">Match Report</p>
-                    <p className="text-[10px] text-white/40 mt-1">Submit report</p>
-                  </button>
-                  <button className="p-4 rounded-xl bg-brand-green/10 border border-brand-green/30 text-left hover:bg-brand-green/20 transition-colors">
-                    <Shield size={24} className="text-brand-green mb-3" />
-                    <p className="font-bold text-sm">Lineup</p>
-                    <p className="text-[10px] text-white/40 mt-1">Set formation</p>
-                  </button>
-                  <button className="p-4 rounded-xl bg-white/5 border border-white/10 text-left hover:bg-white/10 transition-colors">
-                    <Settings size={24} className="text-white/40 mb-3" />
-                    <p className="font-bold text-sm">Team Settings</p>
-                    <p className="text-[10px] text-white/40 mt-1">Edit details</p>
-                  </button>
-                </div>
-              </div>
+            {/* Quick Actions */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+               <div className="lg:col-span-2">
+                 <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-black italic uppercase tracking-widest text-sm">Squad Management</h3>
+                    <button className="flex items-center gap-2 bg-yellow-500 text-black px-4 py-1.5 rounded-lg font-black uppercase text-[10px] tracking-widest">
+                       <UserPlus size={14} /> Add Player
+                    </button>
+                 </div>
+                 <div className="glass rounded-[2rem] border border-white/5 overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-white/5 text-[10px] font-black uppercase tracking-widest text-white/30">
+                          <th className="px-6 py-4">Player</th>
+                          <th className="px-6 py-4">Position</th>
+                          <th className="px-6 py-4 text-center">Goals</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {myPlayers.map(player => (
+                          <tr key={player.id} className="hover:bg-white/[0.02] transition-colors group">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center font-black text-[10px]">
+                                  {player.name[0]}
+                                </div>
+                                <span className="font-bold text-sm">{player.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                               <span className="text-[10px] font-black uppercase text-white/40 tracking-widest">{player.position}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center font-black text-brand-green">{player.goals}</td>
+                            <td className="px-6 py-4 text-right">
+                               <button className="p-2 hover:text-white text-white/20 transition-colors">
+                                 <Settings size={14} />
+                               </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                 </div>
+               </div>
 
-              {/* Upcoming Matches */}
-              <div className="glass rounded-2xl p-6">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white/50 mb-6 flex items-center gap-2">
-                  <Calendar size={16} />
-                  Upcoming Fixtures
-                </h3>
-                <div className="space-y-4">
-                  {myMatches.filter(m => m.status === 'scheduled').slice(0, 3).map((match) => (
-                    <div key={match.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02]">
-                      <div>
-                        <p className="font-bold text-sm">
-                          {match.homeTeamId === myTeam.id ? 'vs ' + match.awayTeam.name : '@ ' + match.homeTeam.name}
-                        </p>
-                        <p className="text-[10px] text-white/30">{match.competition}</p>
+               <div className="space-y-6">
+                 <h3 className="font-black italic uppercase tracking-widest text-sm px-2">Upcoming Schedule</h3>
+                 <div className="space-y-4">
+                    {myMatches.filter(m => m.status === 'scheduled').map(match => (
+                      <div key={match.id} className="glass rounded-2xl p-6 border border-white/5">
+                         <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-4">{match.competition}</p>
+                         <div className="flex items-center justify-between">
+                            <span className="font-black italic text-sm">{match.homeTeam.shortName}</span>
+                            <div className="bg-white/5 px-3 py-1 rounded-lg text-[10px] font-black uppercase">VS</div>
+                            <span className="font-black italic text-sm">{match.awayTeam.shortName}</span>
+                         </div>
+                         <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                           <div className="flex items-center gap-2 text-white/40">
+                             <Calendar size={12} />
+                             <span className="text-[10px] font-bold uppercase">{match.startTime.split('T')[0]}</span>
+                           </div>
+                           <button className="text-[10px] font-black uppercase text-yellow-500 hover:underline">Details</button>
+                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-brand-blue">
-                          {new Date(match.startTime).toLocaleDateString()}
-                        </p>
-                        <p className="text-[10px] text-white/30">
-                          {match.homeTeamId === myTeam.id ? 'HOME' : 'AWAY'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Top Players */}
-            <div className="glass rounded-2xl p-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-white/50 mb-6 flex items-center gap-2">
-                <Star size={16} className="text-yellow-500" />
-                Squad Performance
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {myPlayers.slice(0, 6).map((player) => (
-                  <div key={player.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center font-bold">
-                      {player.number}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-sm">{player.name}</p>
-                      <p className="text-[10px] text-white/30">{player.position}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-black text-brand-green">{player.goals}</p>
-                      <p className="text-[8px] text-white/20 uppercase">Goals</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'roster' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-3xl font-black italic uppercase tracking-tighter">Squad Roster</h2>
-              <button className="gradient-green text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
-                <UserPlus size={18} />
-                Add Player
-              </button>
-            </div>
-            <div className="glass rounded-2xl overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-white/5 text-[10px] font-black uppercase tracking-widest text-white/30">
-                    <th className="px-6 py-4 text-left">#</th>
-                    <th className="px-6 py-4 text-left">Player</th>
-                    <th className="px-6 py-4 text-left">Position</th>
-                    <th className="px-6 py-4 text-center">Goals</th>
-                    <th className="px-6 py-4 text-center">Assists</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {myPlayers.map((player) => (
-                    <tr key={player.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="px-6 py-4 font-black">{player.number}</td>
-                      <td className="px-6 py-4 font-bold">{player.name}</td>
-                      <td className="px-6 py-4 text-white/60">{player.position}</td>
-                      <td className="px-6 py-4 text-center font-bold text-brand-green">{player.goals}</td>
-                      <td className="px-6 py-4 text-center font-bold text-brand-blue">{player.assists}</td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="text-[10px] font-bold text-brand-blue hover:underline">Edit</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'matches' && (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter">Match Reports</h2>
-            <div className="glass rounded-2xl p-8 text-center">
-              <Calendar size={48} className="mx-auto text-yellow-500 mb-4" />
-              <p className="text-white/40">View and submit match reports for your team fixtures.</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'reports' && (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter">Team Reports</h2>
-            <div className="glass rounded-2xl p-8 text-center">
-              <FileText size={48} className="mx-auto text-brand-blue mb-4" />
-              <p className="text-white/40">Analytics and performance reports for your team.</p>
+                    ))}
+                 </div>
+               </div>
             </div>
           </div>
         )}

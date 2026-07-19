@@ -150,11 +150,11 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
                     <p className="text-xs text-white/40 mt-1 max-w-xs">Follow matches, make predictions, and engage with the community</p>
                   </div>
                 </div>
-                {role === 'fan' && <div className="w-8 h-8 rounded-full bg-brand-blue flex items-center justify-center text-white"><Check size={20} /></div>}
+                {role === 'fan' && <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center"><Check size={14} /></div>}
               </button>
 
               {/* Other Roles - Smaller Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                   { id: 'team_manager', label: 'Manager', icon: <Users size={20} />, color: 'yellow-500' },
                   { id: 'media', label: 'Media', icon: <Newspaper size={20} />, color: 'purple-500' },
@@ -164,17 +164,16 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
                     key={option.id}
                     type="button"
                     onClick={() => handleRoleSelect(option.id as UserRole)}
-                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center text-center gap-2 ${
+                    className={`p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center gap-2 ${
                       role === option.id
-                        ? `border-${option.color} bg-${option.color}/10`
-                        : 'border-white/10 hover:border-white/20 bg-white/5'
+                        ? `border-${option.color} bg-white/10`
+                        : 'border-white/5 bg-white/5 hover:border-white/10'
                     }`}
                   >
-                    <div className={role === option.id ? `text-${option.color}` : 'text-white/20'}>
+                    <div className={`p-3 rounded-lg ${role === option.id ? `bg-${option.color} text-black` : 'bg-white/5 text-white/40'}`}>
                       {option.icon}
                     </div>
                     <span className="text-xs font-black uppercase tracking-widest">{option.label}</span>
-                    <Lock size={12} className="text-white/20" />
                   </button>
                 ))}
               </div>
@@ -182,21 +181,21 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
 
             {/* Role Password Input (Conditional) */}
             {showRolePasswordInput && (
-              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                    Access Password for {role.replace('_', ' ')}
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                    <input
-                      type="password"
-                      value={rolePasswordInput}
-                      onChange={(e) => setRolePasswordInput(e.target.value)}
-                      placeholder="Enter access code"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-12 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
-                    />
+              <div className="animate-in slide-in-from-top-4 duration-300">
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20">
+                    <Lock size={18} />
                   </div>
+                  <div className="absolute left-12 top-2 text-[8px] font-black uppercase tracking-widest text-white/30">
+                    Access Password for {role.replace('_', ' ')}
+                  </div>
+                  <input
+                    type="password"
+                    value={rolePasswordInput}
+                    onChange={(e) => setRolePasswordInput(e.target.value)}
+                    placeholder="Enter access code"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-12 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                  />
                 </div>
               </div>
             )}
@@ -206,8 +205,8 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
             {/* User Info */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-                  <UserIcon size={14} /> Username
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+                   <UserIcon size={12}/> Username
                 </label>
                 <input
                   type="text"
@@ -220,8 +219,8 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-                  <Smartphone size={14} /> Telephone
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+                   <Smartphone size={12}/> Telephone
                 </label>
                 <input
                   type="tel"
@@ -237,7 +236,7 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-white/40">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
                   Email Address
                 </label>
                 <input
@@ -254,7 +253,7 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
             {/* Password Info */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-white/40">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
                   Password
                 </label>
                 <div className="relative">
@@ -269,19 +268,19 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-white/40">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">
                   Confirm Password
                 </label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat password"
@@ -291,7 +290,7 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
               </div>
 
               <div className="pt-2">
-                <p className="text-[10px] text-white/20 italic">
+                <p className="text-[9px] text-white/20 leading-relaxed">
                   * By joining, you agree to follow the Rx Live community guidelines and sportsmanship rules.
                 </p>
               </div>
@@ -301,27 +300,27 @@ export default function SignupPage({ onNavigate }: SignupPageProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full gradient-green text-black font-black uppercase tracking-widest py-4 rounded-xl flex items-center justify-center gap-3 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(57,255,20,0.2)]"
+            className="w-full gradient-green text-black font-black uppercase tracking-widest py-5 rounded-2xl flex items-center justify-center gap-3 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(57,255,20,0.2)]"
           >
             {loading ? (
-              <Loader2 size={20} className="animate-spin" />
+              <Loader2 size={24} className="animate-spin" />
             ) : (
               <>
-                <UserPlus size={20} />
+                <UserPlus size={24} />
                 Create Account
               </>
             )}
           </button>
 
-          <div className="text-center pt-4 border-t border-white/10">
-            <p className="text-white/40 text-sm">
+          <div className="text-center">
+            <p className="text-white/40 text-xs font-bold uppercase tracking-widest">
               Already a member?{' '}
               <button
                 type="button"
                 onClick={() => onNavigate('login')}
-                className="text-brand-green font-bold hover:underline"
+                className="text-brand-green hover:underline ml-1"
               >
-                Sign In
+                Login
               </button>
             </p>
           </div>

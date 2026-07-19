@@ -19,7 +19,7 @@ export default function MatchControlOrganized() {
       loadMatches();
     }
   }, [selectedCompetition]);
-  
+
   async function loadCompetitions() {
     try {
       const { data } = await supabase
@@ -36,7 +36,7 @@ export default function MatchControlOrganized() {
       setLoading(false);
     }
   }
-  
+
   async function loadMatches() {
     if (!selectedCompetition) return;
     
@@ -47,7 +47,7 @@ export default function MatchControlOrganized() {
         .eq('competition_id', selectedCompetition.id)
         .order('start_time', { ascending: false });
       
-      setMatchesByCompetition(prev => ({
+      setMatchesByCompetition((prev: any) => ({
         ...prev,
         [selectedCompetition.id]: data || []
       }));
@@ -55,16 +55,7 @@ export default function MatchControlOrganized() {
       console.error('Error loading matches:', err);
     }
   }
-  
-  if (selectedMatch) {
-    return (
-      <MatchControlPro 
-        matchId={selectedMatch.id} 
-        onBack={() => setSelectedMatch(null)} 
-      />
-    );
-  }
-  
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -78,7 +69,7 @@ export default function MatchControlOrganized() {
   
   return (
     <div className="min-h-screen bg-[#0B0E13] p-8">
-      <div className="max-w-[1800px] mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -91,33 +82,35 @@ export default function MatchControlOrganized() {
         <div className="glass rounded-2xl p-6 mb-8 border border-white/10">
           <div className="flex items-center gap-4 mb-4">
             <Trophy className="text-brand-green" size={24} />
-            <h2 className="text-xl font-black uppercase">Select Competition</h2>
+            <h2 className="text-lg font-black uppercase">Select Competition</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {competitions.map(comp => (
               <button
                 key={comp.id}
                 onClick={() => setSelectedCompetition(comp)}
-                className={`p-4 rounded-xl border-2 transition-all text-left ${
+                className={`p-4 rounded-xl border transition-all text-left ${
                   selectedCompetition?.id === comp.id
                     ? 'border-brand-green bg-brand-green/10'
                     : 'border-white/10 bg-white/5 hover:border-white/20'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-black italic uppercase">{comp.name}</span>
-                  <span className={`text-[10px] font-black uppercase px-2 py-1 rounded ${
-                    comp.status === 'active' ? 'bg-green-500/20 text-green-500' :
-                    comp.status === 'completed' ? 'bg-blue-500/20 text-blue-500' :
-                    'bg-yellow-500/20 text-yellow-500'
+                  <span className="font-bold">{comp.name}</span>
+                  <span className="text-xs text-white/40">{comp.season || '2025'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-white/40">Format</span>
+                  <span>{comp.format || comp.type || 'League'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs mt-2">
+                  <span className="text-white/40">Status</span>
+                  <span className={`px-2 py-0.5 rounded ${
+                    comp.status === 'live' ? 'bg-brand-green text-black' : 'bg-white/10'
                   }`}>
                     {comp.status || 'upcoming'}
                   </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-white/40">
-                  <span>{comp.season || '2025'}</span>
-                  <span className="uppercase">{comp.format || comp.type || 'league'}</span>
                 </div>
               </button>
             ))}
@@ -142,13 +135,13 @@ export default function MatchControlOrganized() {
                     className="glass rounded-xl p-4 border border-white/10 hover:border-brand-green/30 transition-all cursor-pointer group"
                   >
                     {/* Status */}
-                    <div className="flex items-center justify-between mb-4">
-                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${
                         match.status === 'live' || match.status === 'first_half' || match.status === 'second_half'
-                          ? 'bg-red-500/20 text-red-500 animate-pulse'
+                          ? 'bg-brand-red text-white animate-pulse'
                           : match.status === 'finished' || match.status === 'full_time'
                           ? 'bg-white/10 text-white/40'
-                          : 'bg-blue-500/20 text-blue-500'
+                          : 'bg-brand-blue/10 text-brand-blue'
                       }`}>
                         {match.status === 'live' || match.status === 'first_half' || match.status === 'second_half'
                           ? 'LIVE'
@@ -156,65 +149,62 @@ export default function MatchControlOrganized() {
                           ? 'FT'
                           : match.status || 'SCHEDULED'}
                       </span>
-                      <span className="text-[10px] text-white/40">{match.minute || 0}'</span>
+                      <span className="text-xs text-white/40">{match.minute || 0}'</span>
                     </div>
                     
                     {/* Teams with Logos */}
-                    <div className="space-y-3 mb-4">
+                    <div className="flex items-center justify-between mb-3">
                       {/* Home Team */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
-                            {match.homeTeam?.logo_url ? (
-                              <img src={match.homeTeam.logo_url} alt={match.homeTeam.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-lg font-black">{match.homeTeam?.short_name?.[0] || 'H'}</span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold">{match.homeTeam?.name || 'Home Team'}</p>
-                            <p className="text-[10px] text-white/40">{match.homeTeam?.city || ''}</p>
-                          </div>
+                      <div className="text-center flex-1">
+                        <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xl font-black italic mx-auto mb-2">
+                          {match.homeTeam?.short_name?.[0] || 'H'}
                         </div>
-                        <span className="text-xl font-black text-brand-green">{match.home_score ?? 0}</span>
+                        <p className="text-xs font-bold truncate">{match.homeTeam?.name || 'Home Team'}</p>
+                        <p className="text-[10px] text-white/40">{match.homeTeam?.city || ''}</p>
+                      </div>
+                      <div className="text-center px-4">
+                        <p className="text-xl font-bold">{match.home_score ?? 0}</p>
                       </div>
                       
                       {/* Away Team */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
-                            {match.awayTeam?.logo_url ? (
-                              <img src={match.awayTeam.logo_url} alt={match.awayTeam.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-lg font-black">{match.awayTeam?.short_name?.[0] || 'A'}</span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold">{match.awayTeam?.name || 'Away Team'}</p>
-                            <p className="text-[10px] text-white/40">{match.awayTeam?.city || ''}</p>
-                          </div>
+                      <div className="text-center flex-1">
+                        <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xl font-black italic mx-auto mb-2">
+                          {match.awayTeam?.short_name?.[0] || 'A'}
                         </div>
-                        <span className="text-xl font-black text-brand-green">{match.away_score ?? 0}</span>
+                        <p className="text-xs font-bold truncate">{match.awayTeam?.name || 'Away Team'}</p>
+                        <p className="text-[10px] text-white/40">{match.awayTeam?.city || ''}</p>
+                      </div>
+                      <div className="text-center px-4">
+                        <p className="text-xl font-bold">{match.away_score ?? 0}</p>
                       </div>
                     </div>
                     
                     {/* Control Button */}
-                    <button className="w-full py-2 rounded-lg bg-brand-green/10 text-brand-green font-black uppercase tracking-widest text-[10px] group-hover:bg-brand-green/20 transition-all flex items-center justify-center gap-2">
-                      <Play size={12} /> CONTROL MATCH
+                    <button className="w-full mt-3 py-2 rounded-lg bg-white/5 hover:bg-brand-green/20 text-white/40 hover:text-brand-green transition-all text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                      <Play size={12} /> Control Match
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="glass rounded-2xl p-20 text-center border border-white/10">
+              <div className="glass rounded-2xl p-12 text-center">
                 <Trophy size={64} className="mx-auto text-white/10 mb-4" />
-                <p className="text-white/30 font-bold uppercase tracking-widest mb-2">No matches yet</p>
+                <p className="text-white/30 font-bold uppercase tracking-widest">No matches yet</p>
                 <p className="text-white/40 text-sm">Create fixtures for this competition first</p>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {selectedMatch && (
+        <MatchControlPro 
+          match={selectedMatch}
+          isOpen={true}
+          onClose={() => setSelectedMatch(null)}
+          onUpdate={loadMatches}
+        />
+      )}
     </div>
   );
 }

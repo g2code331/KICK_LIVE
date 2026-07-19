@@ -1,205 +1,232 @@
 import { useState, useEffect } from 'react';
-import { Activity, Clock, CheckCircle, AlertCircle, Users, MessageSquare, Play, Pause } from 'lucide-react';
+import { Play, Pause, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
+import MatchControlFull from './MatchControlFull';
 
-interface MatchQueueItem {
-  id: number;
-  homeTeam: any;
-  awayTeam: any;
-  competition: string;
-  status: string;
-  minute: number;
-  homeScore: number;
-  awayScore: number;
-  startTime: string;
-}
-
-export default function MultiMatchQueue({ onSelectMatch, selectedMatchId }: any) {
-  const [liveMatches, setLiveMatches] = useState<MatchQueueItem[]>([]);
-  const [upcomingMatches, setUpcomingMatches] = useState<MatchQueueItem[]>([]);
-  const [finishedMatches, setFinishedMatches] = useState<MatchQueueItem[]>([]);
+export default function MultiMatchQueue() {
+  const [matches, setMatches] = useState<any[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+
+  // Load matches on mount and set up real-time polling every 5 seconds
   useEffect(() => {
     loadMatches();
     
-    // Auto-refresh every 30 seconds for live matches
-    const interval = setInterval(loadMatches, 30000);
-    return () => clearInterval(interval);
+    // Poll for match updates every 5 seconds for real-time sync
+    const pollInterval = setInterval(() => {
+      loadMatches();
+    }, 5000);
+    
+    return () => clearInterval(pollInterval);
   }, []);
-  
+
   async function loadMatches() {
     try {
-      const { data: matches } = await supabase
+      // Only fetch necessary columns, limit to 100 matches max
+      const { data, error } = await supabase
         .from('matches')
-        .select('*, homeTeam:teams!home_team_id(short_name, name), awayTeam:teams!away_team_id(short_name, name)')
+        .select('id, home_team_id, away_team_id, home_score, away_score, status, start_time, minute, competition_id, homeTeam:teams!home_team_id(short_name, name), awayTeam:teams!away_team_id(short_name, name)')
         .order('start_time', { ascending: false })
-        .limit(50);
+        .limit(100);
       
-      if (matches) {
-        setLiveMatches(matches.filter(m => m.status === 'live' || m.status === 'first_half' || m.status === 'second_half'));
-        setUpcomingMatches(matches.filter(m => m.status === 'scheduled' || m.status === 'waiting'));
-        setFinishedMatches(matches.filter(m => m.status === 'finished' || m.status === 'full_time'));
-      }
+      if (error) throw error;
+      setMatches(data || []);
     } catch (err) {
       console.error('Error loading matches:', err);
     } finally {
       setLoading(false);
     }
   }
+
+  // Proper status filtering for time-sensitive match states
+  const liveMatches = matches.filter(m => 
+    m.status === 'first_half' || 
+    m.status === 'second_half' ||
+    m.status === 'extra_time' ||
+    m.status === 'live'
+  );
   
+  const upcomingMatches = matches.filter(m => 
+    m.status === 'scheduled' || 
+    m.status === 'waiting'
+  );
+  
+  const finishedMatches = matches.filter(m => 
+    m.status === 'completed' ||
+    m.status === 'full_time' || 
+    m.status === 'finished'
+  );
+
+  if (selectedMatch) {
+    return <MatchControlFull match={selectedMatch} onBack={() => setSelectedMatch(null)} />;
+  }
+
   const getStatusIcon = (status: string) => {
-    if (status === 'live' || status === 'first_half' || status === 'second_half') {
-      return <Activity className="text-red-500 animate-pulse" size={16} />;
+    switch (status) {
+      case 'live':
+      case 'first_half':
+      case 'second_half':
+        return <AlertCircle size={16} className="text-brand-red animate-pulse" />;
+      case 'finished':
+      case 'full_time':
+        return <CheckCircle size={16} className="text-brand-green" />;
+      default:
+        return <Clock size={16} className="text-brand-blue" />;
     }
-    if (status === 'scheduled' || status === 'waiting') {
-      return <Clock className="text-blue-500" size={16} />;
-    }
-    return <CheckCircle className="text-green-500" size={16} />;
   };
-  
-  const getStatusColor = (status: string) => {
-    if (status === 'live' || status === 'first_half' || status === 'second_half') {
-      return 'bg-red-500/20 text-red-500';
-    }
-    if (status === 'scheduled' || status === 'waiting') {
-      return 'bg-blue-500/20 text-blue-500';
-    }
-    return 'bg-green-500/20 text-green-500';
-  };
-  
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-brand-green border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-xs text-white/40">Loading matches...</p>
+          <div className="w-16 h-16 border-4 border-brand-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-brand-green font-bold uppercase">Loading Queue...</p>
         </div>
       </div>
     );
   }
-  
+
   return (
-    <div className="space-y-6">
-      {/* Live Matches */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Activity className="text-red-500" size={20} />
-          <h3 className="text-lg font-black uppercase">Live Matches ({liveMatches.length})</h3>
+    <div className="min-h-screen bg-[#0B0E13] p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-black italic uppercase mb-2">Multi-Match Queue</h1>
+          <p className="text-white/40">Manage multiple matches simultaneously</p>
         </div>
-        
-        {liveMatches.length > 0 ? (
-          <div className="space-y-3">
-            {liveMatches.map(match => (
-              <div
-                key={match.id}
-                onClick={() => onSelectMatch(match)}
-                className={`glass rounded-xl p-4 border cursor-pointer transition-all hover:scale-[1.02] ${
-                  selectedMatchId === match.id ? 'border-brand-green bg-brand-green/10' : 'border-white/10'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1">
-                    {getStatusIcon(match.status)}
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-bold">{match.homeTeam?.short_name || 'HOME'}</span>
-                        <span className="text-lg font-black text-brand-green">{match.home_score ?? 0}</span>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Live Matches */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="flex items-center gap-4 mb-4">
+              <AlertCircle size={20} className="text-brand-red" />
+              <h2 className="text-xl font-black uppercase">Live Matches ({liveMatches.length})</h2>
+            </div>
+            
+            {liveMatches.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {liveMatches.map(match => (
+                  <div
+                    key={match.id}
+                    onClick={() => setSelectedMatch(match)}
+                    className={`glass rounded-xl p-4 border cursor-pointer transition-all hover:scale-[1.02] ${
+                      selectedMatch?.id === match.id ? 'border-brand-green bg-brand-green/10' : 'border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(match.status)}
+                        <div>
+                          <p className="text-xs font-bold">{match.homeTeam?.short_name || 'HOME'}</p>
+                          <p className="text-lg font-black">{match.home_score ?? 0}</p>
+                        </div>
+                        <div className="text-white/40">-</div>
+                        <div>
+                          <p className="text-lg font-black">{match.away_score ?? 0}</p>
+                          <p className="text-xs font-bold">{match.awayTeam?.short_name || 'AWAY'}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold">{match.awayTeam?.short_name || 'AWAY'}</span>
-                        <span className="text-lg font-black text-brand-green">{match.away_score ?? 0}</span>
+                      <div className="text-right">
+                        <p className="text-xs font-bold">
+                          {match.status === 'live' || match.status === 'first_half' || match.status === 'second_half'
+                            ? `${match.minute}'`
+                            : match.status}
+                        </p>
+                        <p className="text-[10px] text-white/40">{match.competition || 'Competition'}</p>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="text-right">
-                    <div className={`px-3 py-1 rounded-full text-xs font-black uppercase mb-2 ${getStatusColor(match.status)}`}>
-                      {match.status === 'live' || match.status === 'first_half' || match.status === 'second_half'
-                        ? `${match.minute}'`
-                        : match.status}
+                ))}
+              </div>
+            ) : (
+              <div className="glass rounded-xl p-12 text-center">
+                <Clock size={48} className="mx-auto text-white/10 mb-4" />
+                <p className="text-white/30 font-bold uppercase tracking-widest">No live matches at the moment</p>
+              </div>
+            )}
+            
+            {/* Upcoming Matches */}
+            <div className="flex items-center gap-4 mb-4 mt-8">
+              <Clock size={20} className="text-brand-blue" />
+              <h2 className="text-xl font-black uppercase">Upcoming ({upcomingMatches.length})</h2>
+            </div>
+            
+            {upcomingMatches.length > 0 ? (
+              <div className="space-y-2">
+                 {upcomingMatches.slice(0, 5).map(match => (
+                   <div
+                     key={match.id}
+                     onClick={() => setSelectedMatch(match)}
+                     className={`glass rounded-lg p-3 border cursor-pointer transition-all hover:bg-white/5 ${
+                       selectedMatch?.id === match.id ? 'border-brand-green' : 'border-white/10'
+                     }`}
+                   >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(match.status)}
+                        <span className="text-sm font-bold">{match.homeTeam?.short_name} vs {match.awayTeam?.short_name}</span>
+                      </div>
+                      <span className="text-xs text-white/40">
+                        {new Date(match.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
-                    <p className="text-xs text-white/40">{match.competition || 'Competition'}</p>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="glass rounded-xl p-8 text-center">
+                <p className="text-white/30 text-sm">No upcoming matches</p>
+              </div>
+            )}
+            
+            {/* Recently Finished */}
+            <div className="flex items-center gap-4 mb-4 mt-8">
+              <CheckCircle size={20} className="text-brand-green" />
+              <h2 className="text-xl font-black uppercase">Recently Finished ({finishedMatches.length})</h2>
+            </div>
+            
+            {finishedMatches.length > 0 ? (
+              <div className="space-y-2">
+                 {finishedMatches.slice(0, 5).map(match => (
+                   <div
+                     key={match.id}
+                     onClick={() => setSelectedMatch(match)}
+                     className={`glass rounded-lg p-3 border cursor-pointer transition-all hover:bg-white/5 ${
+                       selectedMatch?.id === match.id ? 'border-brand-green' : 'border-white/10'
+                     }`}
+                   >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(match.status)}
+                        <span className="text-sm font-bold">
+                          {match.homeTeam?.short_name} {match.home_score} - {match.away_score} {match.awayTeam?.short_name}
+                        </span>
+                      </div>
+                      <span className="text-xs text-white/40">FT</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="glass rounded-xl p-8 text-center">
+                <p className="text-white/30 text-sm">No finished matches</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="glass rounded-xl p-8 text-center text-white/40">
-            <Activity size={48} className="mx-auto mb-4 opacity-20" />
-            <p>No live matches at the moment</p>
+
+          {/* Match Control Panel */}
+          <div className="lg:col-span-1">
+            <div className="glass rounded-[2rem] p-6 sticky top-8">
+              <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Quick Controls</h3>
+              <p className="text-white/40 text-sm text-center py-8">
+                Select a match from the queue to control it
+              </p>
+            </div>
           </div>
-        )}
-      </div>
-      
-      {/* Upcoming Matches */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="text-blue-500" size={20} />
-          <h3 className="text-lg font-black uppercase">Upcoming ({upcomingMatches.length})</h3>
         </div>
-        
-        {upcomingMatches.length > 0 ? (
-          <div className="space-y-2">
-            {upcomingMatches.slice(0, 5).map(match => (
-              <div
-                key={match.id}
-                onClick={() => onSelectMatch(match)}
-                className={`glass rounded-lg p-3 border cursor-pointer transition-all hover:bg-white/5 ${
-                  selectedMatchId === match.id ? 'border-brand-green' : 'border-white/10'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(match.status)}
-                    <span className="text-sm font-bold">{match.homeTeam?.short_name} vs {match.awayTeam?.short_name}</span>
-                  </div>
-                  <span className="text-xs text-white/40">{new Date(match.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="glass rounded-xl p-4 text-center text-white/40 text-sm">
-            No upcoming matches
-          </div>
-        )}
       </div>
-      
-      {/* Recently Finished */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <CheckCircle className="text-green-500" size={20} />
-          <h3 className="text-lg font-black uppercase">Recently Finished ({finishedMatches.length})</h3>
-        </div>
-        
-        {finishedMatches.length > 0 ? (
-          <div className="space-y-2">
-            {finishedMatches.slice(0, 5).map(match => (
-              <div
-                key={match.id}
-                onClick={() => onSelectMatch(match)}
-                className={`glass rounded-lg p-3 border cursor-pointer transition-all hover:bg-white/5 ${
-                  selectedMatchId === match.id ? 'border-brand-green' : 'border-white/10'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(match.status)}
-                    <span className="text-sm font-bold">{match.homeTeam?.short_name} {match.home_score} - {match.away_score} {match.awayTeam?.short_name}</span>
-                  </div>
-                  <span className="text-xs text-white/40">FT</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="glass rounded-xl p-4 text-center text-white/40 text-sm">
-            No finished matches
-          </div>
-        )}
-      </div>
+
+
     </div>
   );
 }

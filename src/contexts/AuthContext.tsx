@@ -7,7 +7,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null; role?: UserRole }>;
+  signIn: (email: string, password: string, phone?: string) => Promise<{ error: string | null; role?: UserRole }>;
   signUp: (email: string, password: string, username: string, phone: string, role: UserRole) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
@@ -36,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('Profile fetch error:', error.message);
         return null;
       }
-      
       return data && data.length > 0 ? data[0] as UserProfile : null;
     } catch (err) {
       console.error('Profile fetch failed:', err);
@@ -55,7 +54,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (error) {
           console.warn('Supabase session error:', error.message);
-          // Don't crash, just set loading to false
           setLoading(false);
           return;
         }
@@ -89,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
       }
+      
       setLoading(false);
     });
 
@@ -98,18 +97,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, phone?: string) => {
     try {
+      // If phone is provided, try phone+password login
+      if (phone) {
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+          phone, 
+          password 
+        });
+        
+        if (error) return { error: error.message };
+        
+        if (data.user) {
+          const profile = await fetchProfile(data.user.id);
+          setProfile(profile);
+          return { error: null, role: profile?.role };
+        }
+        
+        return { error: 'Login failed' };
+      }
+      
+      // Otherwise use email/username+password
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
+      
       if (error) return { error: error.message };
-
+      
       if (data.user) {
         const profile = await fetchProfile(data.user.id);
         setProfile(profile);
         return { error: null, role: profile?.role };
       }
-
+      
       return { error: 'Login failed' };
     } catch (err: any) {
       return { error: err.message || 'Sign in failed' };
@@ -121,7 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { username, role } },
+        options: {
+          data: { username, role }
+        },
       });
 
       if (error) return { error: error.message };
@@ -163,7 +183,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isMedia: profile?.role === 'media',
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
