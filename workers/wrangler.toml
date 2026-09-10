@@ -1,0 +1,369 @@
+# ============================================================================
+#  Kick Live API Worker — Cloudflare configuration
+#
+#  One Worker, three named environments. `name` is what Cloudflare deploys, so staging and
+#  production get separate Worker instances and separate secrets:
+#
+#    npx wrangler dev     --config workers/wrangler.toml                      # top-level [vars] = development
+#    npx wrangler deploy  --config workers/wrangler.toml --env staging
+#    npx wrangler deploy  --config workers/wrangler.toml --env production
+#
+#  Secrets live only in the Cloudflare dashboard / `wrangler secret put`, per environment:
+#
+#    npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env production
+#    npx wrangler secret put SUPABASE_JWT_SECRET       --env production
+#    npx wrangler secret put TURNSTILE_SECRET_KEY      --env production
+#
+#  A staging key deployed to production (or the reverse) is the incident this layout prevents;
+#  `SUPABASE_PROJECT_REF` below is what makes that a startup error instead of a data mix-up.
+#
+#  THIS FILE MUST NEVER CONTAIN: a service-role key, a JWT secret, a real project's publishable
+#  key, an `env_file` pointing at a real .env, or `ALLOWED_ORIGINS = "*"`.
+# ============================================================================
+
+name = "kicklive-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+send_metrics = false
+
+# ─────────────────────────────────────────────────────────────────────────
+# DEVELOPMENT — the top-level block, used by `wrangler dev`.
+# Reads point at the *staging* project. There is no path from this block to production data:
+# no production secret is set on this Worker instance, and the URL below must not be a
+# production ref (the `SUPABASE_PROJECT_REF` check in services/supabase.ts enforces the pair).
+# ─────────────────────────────────────────────────────────────────────────
+[vars]
+NOTIFICATION_QUEUE_NAME = "kicklive-notifications-dev"
+AD_EVENTS_QUEUE_NAME = "kicklive-ad-events-dev"
+#  The names and not the bindings: `MessageBatch#queue` reports a queue *name*, one Worker now serves
+#  two queues, and a rename in this file without the matching var would silently route measurements
+#  into the notification fan-out. `tests/unit/phase2-api-boundary.test.ts` parses both sides of that
+#  sentence, so the pair cannot drift apart quietly.
+APP_ENV = "development"
+SUPABASE_URL = "https://REPLACE-WITH-STAGING-REF.supabase.co"
+SUPABASE_PROJECT_REF = "REPLACE-WITH-STAGING-REF"
+# Publishable/anon key: public by design (the browser ships it), safe in this file.
+SUPABASE_ANON_KEY = "REPLACE-WITH-STAGING-PUBLISHABLE-KEY"
+# Exact origins only; `*` is rejected by env.ts. These are the local SPA ports this repo uses.
+ALLOWED_ORIGINS = "http://localhost:5000,http://127.0.0.1:5000,http://localhost:5173,http://127.0.0.1:5173"
+# Secrets for local dev come from workers/.dev.vars (git-ignored) — see .dev.vars.example.
+# RATE_LIMIT_KV is intentionally unbound in development: the limiter falls back to a per-isolate
+# counter and says so in `x-ratelimit-store: memory`.
+
+# Phase 6: ceiling for one uploaded file, in bytes, across every category. The per-kind caps in
+# src/lib/mediaPolicy.ts are tighter and are what an error message names; this is the outer bound.
+# Top-level, because wrangler merges top-level [vars] into every environment.
+MEDIA_MAX_BYTES = 26214400
+
+# Phase 3: the live match room. One instance per match id (`idFromName(String(match_id))`), holding the
+# sockets and the write queue for that match. `class_name` must match the exported class in
+# `src/do/MatchRoom.ts`, and the `migrations` block below is what creates it — an existing environment
+# that adds a class needs a NEW tag; reusing a tag makes wrangler refuse, which is the safe direction.
+[[durable_objects.bindings]]
+name = "LIVE_MATCH_ROOM"
+class_name = "MatchRoom"
+
+[[migrations]]
+tag = "v1-live-rooms"
+new_sqlite_classes = ["MatchRoom"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# STAGING — the rehearsal environment. Same schema, different project, different keys.
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 5 · the notification queue and the sweep. Declared here, at the top level, and then repeated per
+# environment below — TOML tables are positional, so an active `[[queues.producers]]` written *after*
+# `[env.staging]` would silently become `env.staging.queues.producers` instead of the top-level one. That is a
+# whole class of "works locally, absent in production" bug, and
+# `tests/unit/phase2-api-boundary.test.ts` now asserts the ordering.
+#
+# The queue is a wake-up, never the record (§11 of docs/NOTIFICATIONS_ARCHITECTURE.md), so the numbers below are
+# sized for a goal, not for a demo: 25 jobs per batch (one message is one job), 5 concurrent batches, and a
+# retry budget that matches the job's own so a message cannot outlive its record.
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 5 activated the queue. It is bound because code depends on it now — `index.ts` exports `queue` and
+# `scheduled`, and the notification jobs are fanned out by `queues/notifications.ts` — and the two numbers
+# Cloudflare lets you tune are set for a goal, not for a demo:
+#
+#   max_batch_size    the queue carries *job ids*; one message is one job, so 25 messages is 25 notifications
+#                     (the 500-token batches are inside `deliverJob`; Cloudflare caps this at 100 anyway).
+#   max_concurrency   5 batches in flight per instance; FCM's per-project rate is the reason it is not 50.
+#   max_retries       the consumer never drops a message on the floor: a job that keeps failing is left
+#                     `retry` in the database and the sweep re-enqueues it, so the DLQ is for poison
+#                     messages. There is deliberately no delay knob here — the wrangler 4 consumer
+#                     schema exposes none; the interval between attempts is Cloudflare's schedule.
+
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 6 · the media bucket. Bound because `services/mediaStore.ts` writes to it, and named per
+# environment for the same reason the queues are: two environments sharing one bucket means a dev
+# `wrangler dev` can overwrite a production logo. The binding is not a credential — that is the
+# point of R2 here (docs/R2_MEDIA_ARCHITECTURE.md §2): nothing in this file, in `.dev.vars`, or in a
+# deploy log can be replayed against the rest of the account, because the binding only reaches this
+# one bucket from inside this Worker.
+#
+# `MEDIA_BUCKET` is the name `env.MEDIA_BUCKET` reads in workers/src. The bucket itself is created
+# with `npx wrangler r2 bucket create kicklive-media-dev` (etc.); a deploy against a missing bucket
+# fails at upload time with 503 naming the binding, which is the intended failure.
+# ─────────────────────────────────────────────────────────────────────────
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "kicklive-media-dev"
+
+[[queues.producers]]
+queue = "kicklive-notifications-dev"
+binding = "NOTIFICATION_QUEUE"
+
+[[queues.consumers]]
+queue = "kicklive-notifications-dev"
+max_batch_size = 25
+max_batch_timeout = 20
+max_retries = 6
+max_concurrency = 5
+
+# Poison messages only, by the rule above. `dead_letter_queue` is a plain string on the consumer —
+# wrangler 4 rejects the old `[queues.consumers.dead_letter_queue]` sub-table — and the DLQ itself
+# must be created first (`npx wrangler queues create kicklive-notifications-failed-dev`), or the
+# deploy fails with a "queue not found" that has nothing to do with the code.
+dead_letter_queue = "kicklive-notifications-failed-dev"
+
+# Ad measurement (Phase 7). A second queue rather than a second message type on the notification queue
+# because the two want opposite delivery policies: a notification job is a wake-up for a row that already
+# exists (retry until the sweep catches it), while an ad event is the record itself, written once and
+# deduplicated below us. Sharing one consumer would force one retry policy on both, and the notification
+# side's `max_retries = 6` would mean a poison ad batch is replayed six times against a table whose only
+# guard is a unique key. Same Worker, so `queue` in `index.ts` discriminates by queue name.
+#
+# `max_batch_size = 100` matches the consumer's own cap: a batch the size of the insert the RPC will perform
+# means one database call per batch rather than one per message, which is the entire reason the rollup stays
+# cheap. `max_retries = 2` is small on purpose — a failed insert retries the whole batch, and the unique
+# `dedupe_key` turns the retry into a no-op for rows that did land, so more retries cost nothing but delay.
+[[queues.producers]]
+queue = "kicklive-ad-events-dev"
+binding = "AD_EVENTS_QUEUE"
+
+[[queues.consumers]]
+queue = "kicklive-ad-events-dev"
+max_batch_size = 100
+max_batch_timeout = 10
+max_retries = 2
+max_concurrency = 5
+
+# No dead-letter queue for measurements. A message that survives two retries has already lost its day:
+# an impression is counted per UTC day, so a redelivery from a DLQ a week later would be refused by the
+# horizon check anyway, and a queue nobody reads is a cost with no recovery path behind it.
+
+[triggers]
+# The five-minute safety net (docs/NOTIFICATIONS_ARCHITECTURE.md §11): re-enqueue anything the queue lost,
+# and prune long-dead device rows on the hour. `*/5 * * * *` is UTC.
+#
+# The second line is Phase 6 media retention (expire stale upload reservations, retire objects past their
+# superseded/soft-deleted window, then delete the keys the database named). It runs at :17 rather than :00
+# so a bad hour cannot have both sweeps colliding with the notification work, and `MEDIA_SWEEP_CRON` in
+# `src/services/mediaStore.ts` must match this string exactly — a test asserts it.
+crons = ["*/5 * * * *", "17 * * * *"]
+#
+
+# ─────────────────────────────────────────────────────────────────────────
+[env.staging]
+name = "kicklive-api-staging"
+
+[env.staging.vars]
+NOTIFICATION_QUEUE_NAME = "kicklive-notifications-staging"
+AD_EVENTS_QUEUE_NAME = "kicklive-ad-events-staging"
+#  The names and not the bindings: `MessageBatch#queue` reports a queue *name*, one Worker now serves
+#  two queues, and a rename in this file without the matching var would silently route measurements
+#  into the notification fan-out. `tests/unit/phase2-api-boundary.test.ts` parses both sides of that
+#  sentence, so the pair cannot drift apart quietly.
+APP_ENV = "staging"
+SUPABASE_URL = "https://REPLACE-WITH-STAGING-REF.supabase.co"
+SUPABASE_PROJECT_REF = "REPLACE-WITH-STAGING-REF"
+SUPABASE_ANON_KEY = "REPLACE-WITH-STAGING-PUBLISHABLE-KEY"
+# The staging SPA origin, plus the Arena/preview hosts used during review, each spelled exactly.
+ALLOWED_ORIGINS = "https://staging.kicklive.football"
+
+# [env.staging.routes] is deployment-time: uncomment with a real zone once DNS exists.
+# [[env.staging.routes]]
+# pattern = "api.staging.kicklive.football/*"
+# custom_domain = false
+
+# Created 2026-09-10 as `staging-RATE_LIMIT_KV`. This block is the difference between a global
+# limiter and a per-isolate one: the middleware answers with `x-ratelimit-store: kv` while the
+# binding exists and `memory` the moment it disappears, so losing it is visible, not silent.
+[[env.staging.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "14daf4b0404c42039317166e1d03f62d"
+
+# Named environments do not inherit top-level bindings, so the room is declared per environment.# The queue and the cron are repeated per environment rather than inherited — `[[env.staging.*]]` blocks see
+# no top-level bindings, so declaring them once would mean notifications work in dev and are silently absent in
+# staging. This is the same reason `durable_objects.bindings` is repeated above.
+# Phase 6 · per-environment media bucket, repeated because named environments inherit no top-level
+# bindings at all (see the ordering note above).
+[[env.staging.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "kicklive-media-staging"
+
+[[env.staging.queues.producers]]
+queue = "kicklive-notifications-staging"
+binding = "NOTIFICATION_QUEUE"
+
+[[env.staging.queues.consumers]]
+queue = "kicklive-notifications-staging"
+max_batch_size = 25
+max_batch_timeout = 20
+max_retries = 6
+max_concurrency = 5
+
+dead_letter_queue = "kicklive-notifications-failed-staging"
+
+# Ad measurement (Phase 7). A second queue rather than a second message type on the notification queue
+# because the two want opposite delivery policies: a notification job is a wake-up for a row that already
+# exists (retry until the sweep catches it), while an ad event is the record itself, written once and
+# deduplicated below us. Sharing one consumer would force one retry policy on both, and the notification
+# side's `max_retries = 6` would mean a poison ad batch is replayed six times against a table whose only
+# guard is a unique key. Same Worker, so `queue` in `index.ts` discriminates by queue name.
+#
+# `max_batch_size = 100` matches the consumer's own cap: a batch the size of the insert the RPC will perform
+# means one database call per batch rather than one per message, which is the entire reason the rollup stays
+# cheap. `max_retries = 2` is small on purpose — a failed insert retries the whole batch, and the unique
+# `dedupe_key` turns the retry into a no-op for rows that did land, so more retries cost nothing but delay.
+[[env.staging.queues.producers]]
+queue = "kicklive-ad-events-staging"
+binding = "AD_EVENTS_QUEUE"
+
+[[env.staging.queues.consumers]]
+queue = "kicklive-ad-events-staging"
+max_batch_size = 100
+max_batch_timeout = 10
+max_retries = 2
+max_concurrency = 5
+
+# No dead-letter queue for measurements. A message that survives two retries has already lost its day:
+# an impression is counted per UTC day, so a redelivery from a DLQ a week later would be refused by the
+# horizon check anyway, and a queue nobody reads is a cost with no recovery path behind it.
+
+[env.staging.triggers]
+# The media cron string must equal MEDIA_SWEEP_CRON in src/services/mediaStore.ts (asserted in tests).
+crons = ["*/5 * * * *", "17 * * * *"]
+
+[[env.staging.durable_objects.bindings]]
+name = "LIVE_MATCH_ROOM"
+class_name = "MatchRoom"
+
+[[env.staging.migrations]]
+tag = "v1-live-rooms"
+new_sqlite_classes = ["MatchRoom"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# PRODUCTION
+# ─────────────────────────────────────────────────────────────────────────
+[env.production]
+name = "kicklive-api"
+
+[env.production.vars]
+NOTIFICATION_QUEUE_NAME = "kicklive-notifications"
+AD_EVENTS_QUEUE_NAME = "kicklive-ad-events"
+#  The names and not the bindings: `MessageBatch#queue` reports a queue *name*, one Worker now serves
+#  two queues, and a rename in this file without the matching var would silently route measurements
+#  into the notification fan-out. `tests/unit/phase2-api-boundary.test.ts` parses both sides of that
+#  sentence, so the pair cannot drift apart quietly.
+APP_ENV = "production"
+SUPABASE_URL = "https://REPLACE-WITH-PRODUCTION-REF.supabase.co"
+SUPABASE_PROJECT_REF = "REPLACE-WITH-PRODUCTION-REF"
+SUPABASE_ANON_KEY = "REPLACE-WITH-PRODUCTION-PUBLISHABLE-KEY"
+# The packaged desktop renderer must be listed too, or desktop builds fail on every API call while
+# the web app works — the worst possible shape for a bug report. Add its origin when Phase 2 ships
+# the API to the desktop shell.
+ALLOWED_ORIGINS = "https://kicklive.football,https://www.kicklive.football"
+
+# [[env.production.routes]]
+# pattern = "api.kicklive.football/*"
+# custom_domain = false
+
+# Created 2026-09-10 as `production-RATE_LIMIT_KV`. The two ids must stay distinct: one namespace
+# shared by both environments is how a staging load test spends production's rate budget.
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "8cc376e1daa3476696bf28a7e13fa165"
+# The queue and the cron are repeated per environment rather than inherited — `[[env.staging.*]]` blocks see
+# no top-level bindings, so declaring them once would mean notifications work in dev and are silently absent in
+# staging. This is the same reason `durable_objects.bindings` is repeated above.
+# Phase 6 · per-environment media bucket, repeated because named environments inherit no top-level
+# bindings at all (see the ordering note above).
+[[env.production.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "kicklive-media"
+
+[[env.production.queues.producers]]
+queue = "kicklive-notifications"
+binding = "NOTIFICATION_QUEUE"
+
+[[env.production.queues.consumers]]
+queue = "kicklive-notifications"
+max_batch_size = 25
+max_batch_timeout = 20
+max_retries = 6
+max_concurrency = 5
+
+dead_letter_queue = "kicklive-notifications-failed"
+
+# Ad measurement (Phase 7). A second queue rather than a second message type on the notification queue
+# because the two want opposite delivery policies: a notification job is a wake-up for a row that already
+# exists (retry until the sweep catches it), while an ad event is the record itself, written once and
+# deduplicated below us. Sharing one consumer would force one retry policy on both, and the notification
+# side's `max_retries = 6` would mean a poison ad batch is replayed six times against a table whose only
+# guard is a unique key. Same Worker, so `queue` in `index.ts` discriminates by queue name.
+#
+# `max_batch_size = 100` matches the consumer's own cap: a batch the size of the insert the RPC will perform
+# means one database call per batch rather than one per message, which is the entire reason the rollup stays
+# cheap. `max_retries = 2` is small on purpose — a failed insert retries the whole batch, and the unique
+# `dedupe_key` turns the retry into a no-op for rows that did land, so more retries cost nothing but delay.
+[[env.production.queues.producers]]
+queue = "kicklive-ad-events"
+binding = "AD_EVENTS_QUEUE"
+
+[[env.production.queues.consumers]]
+queue = "kicklive-ad-events"
+max_batch_size = 100
+max_batch_timeout = 10
+max_retries = 2
+max_concurrency = 5
+
+# No dead-letter queue for measurements. A message that survives two retries has already lost its day:
+# an impression is counted per UTC day, so a redelivery from a DLQ a week later would be refused by the
+# horizon check anyway, and a queue nobody reads is a cost with no recovery path behind it.
+
+[env.production.triggers]
+# The media cron string must equal MEDIA_SWEEP_CRON in src/services/mediaStore.ts (asserted in tests).
+crons = ["*/5 * * * *", "17 * * * *"]
+
+[[env.production.durable_objects.bindings]]
+name = "LIVE_MATCH_ROOM"
+class_name = "MatchRoom"
+
+# Production keeps its own tag history: rooms already created in staging are not carried over, and that
+# is correct — a match's live state is rebuildable from Postgres, which is why losing a Durable Object
+# (or a whole environment's worth of them) is an outage of convenience, not a data-loss event.
+[[env.production.migrations]]
+tag = "v1-live-rooms"
+new_sqlite_classes = ["MatchRoom"]
+
+[env.production.observability]
+[env.production.observability.logs]
+enabled = true
+# Invocation logs are the second half of the audit trail: `audit_log` says what was done, these say
+# which request did it. Keep the retention window aligned with the audit table.
+invocation_logs = true
+
+# ─────────────────────────────────────────────────────────────────────────
+# PLANNED BINDINGS — deliberately inactive until the phase that owns them.
+#
+# (Phase 3 shipped [durable_objects.bindings] + [migrations]; Phase 5 shipped [[queues.producers]];
+#  Phase 6 shipped [[r2_buckets]] — each was added when code started depending on it, which is what
+#  this list of "planned" bindings is for: nothing here may be activated on speculation.)
+#
+# [[d1_databases]]    # INTENTIONALLY ABSENT — do not "helpfully" add one.
+# D1 would be a second copy of match data with a sync job in the middle. Supabase Postgres is the
+# source of truth for every business table; D1 is only ever justified later for Worker-owned
+# ephemeral state, and that needs its own reviewed migration. See workers/README.md.
+# ─────────────────────────────────────────────────────────────────────────
